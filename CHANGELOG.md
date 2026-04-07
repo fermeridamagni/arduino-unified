@@ -4,6 +4,20 @@ All notable changes to the "arduino-unified" extension will be documented in thi
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [1.0.1] - 2026-04-07
+
+### 🐛 Bug Fixes
+- **Critical**: Fix webview build not included in published extension
+  - Add `compile-webview` step to package script to ensure webview is built before packaging
+  - Include `webview/dist/` in published extension via `.vscodeignore` exclusion rule
+  - Resolves "Webview build not found" error when using Install Library command
+- Correct formatting in FUNDING.yml for GitHub Sponsors configuration
+- Ensure CI triggers on specified paths for push and pull_request events
+
+### ♻️ Other Changes
+- Update `.vscodeignore` to include additional directories and files
+- Remove PLAN.md file containing project research and implementation details
+
 ## [1.0.0] - 2026-04-07
 
 Arduino Unified 1.0.0 is the first stable release of the extension.
