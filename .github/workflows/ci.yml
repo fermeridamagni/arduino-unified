@@ -3,8 +3,14 @@ name: CI
 on:
   push:
     branches: [main, develop]
+    paths: ["src/**.ts", "webview/**.ts", "webview/**.tsx"]
   pull_request:
     branches: [main, develop]
+    paths: ["src/**.ts", "webview/**.ts", "webview/**.tsx"]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
