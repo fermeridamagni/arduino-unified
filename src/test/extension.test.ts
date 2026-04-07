@@ -72,8 +72,13 @@ suite("Arduino Unified Comprehensive Test Suite", () => {
         sketchDir,
         `${sketchDirName}.ino`
       );
+
       // Normalize paths for cross-platform testing (Windows uses backslashes)
-      const expected = path.posix.join("/Users/test/projects/Blink", "Blink.ino");
+      const expected = path.posix.join(
+        "/Users/test/projects/Blink",
+        "Blink.ino"
+      );
+
       assert.strictEqual(
         path.normalize(suggestedRenameTarget).replace(/\\/g, "/"),
         expected
