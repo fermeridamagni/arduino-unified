@@ -1,0 +1,29 @@
+name: Auto Assign
+
+on:
+  issues:
+    types: [opened, reopened]
+
+  pull_request:
+    types: [opened, reopened]
+
+concurrency:
+  group: auto-assign-${{ github.ref }} # Group runs by the current ref to avoid conflicts
+  cancel-in-progress: true
+
+jobs:
+  auto-assign:
+    name: Auto Assign
+    runs-on: ubuntu-latest
+
+    permissions:
+      issues: write # to be able to comment on released issues
+      pull-requests: write # to be able to comment on released pull requests
+
+    steps:
+      - name: "Auto-assign issue"
+        uses: pozil/auto-assign-issue@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          assignees: fermeridamagni
+          numOfAssignee: 1
