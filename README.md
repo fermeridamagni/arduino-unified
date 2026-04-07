@@ -373,7 +373,7 @@ Arduino Unified is built on a modern, robust architecture:
 ### Prerequisites
 
 - Node.js 18+ and pnpm 8+
-- VS Code 1.90.0+
+- VS Code 1.107.0+
 
 ### Building from Source
 

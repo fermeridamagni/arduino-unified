@@ -62,7 +62,7 @@ Instances of abusive, harassing, or otherwise unacceptable behavior may be repor
 
 - **Node.js** 18 or higher
 - **pnpm** 8 or higher (install via `npm install -g pnpm`)
-- **VS Code** 1.90.0 or higher
+- **VS Code** 1.107.0 or higher
 - **Git**
 
 ### Setting Up the Development Environment
