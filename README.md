@@ -444,9 +444,9 @@ Arduino Unified includes the following third-party components:
 
 #### Arduino CLI Protocol Buffer Definitions
 
-- **Copyright**: 2024 ARDUINO SA (https://www.arduino.cc/)
+- **Copyright**: 2024 ARDUINO SA [Arduino](https://www.arduino.cc/)
 - **License**: Apache License 2.0
-- **Source**: https://github.com/arduino/arduino-cli
+- **Source**: [Arduino CLI](https://github.com/arduino/arduino-cli)
 - **Files**: `src/cli/proto/cc/arduino/cli/commands/v1/*.proto`
 
 These protocol buffer definitions are used for gRPC communication with the Arduino CLI daemon.
@@ -455,7 +455,7 @@ These protocol buffer definitions are used for gRPC communication with the Ardui
 
 - **Copyright**: 2008 Google Inc.
 - **License**: BSD 3-Clause License
-- **Source**: https://github.com/protocolbuffers/protobuf
+- **Source**: [Protocol Buffers](https://github.com/protocolbuffers/protobuf)
 - **Files**: `src/cli/proto/google/protobuf/*.proto`, `src/cli/proto/google/rpc/*.proto`
 
 These are standard Google Protocol Buffer definitions used for message serialization.
