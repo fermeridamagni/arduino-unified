@@ -1,0 +1,10 @@
+{
+	"$schema": "../node_modules/@biomejs/biome/configuration_schema.json",
+	"extends": ["ultracite/biome/react"],
+	"root": false,
+	"css": {
+		"parser": {
+			"tailwindDirectives": true
+		}
+	}
+}

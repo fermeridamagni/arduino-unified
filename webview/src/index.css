@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+@theme {
+	--color-arduino-teal: #00979c;
+	--color-arduino-teal-dark: #006064;
+	--color-arduino-bg: #000000;
+	--color-arduino-surface: #0a0a0a;
+	--color-arduino-border: #1a1a1a;
+	--color-arduino-text: #e0e0e0;
+	--color-arduino-text-muted: #888888;
+}
+
+@layer base {
+	body {
+		width: 100vw;
+		/* Ensure the body takes full height of webview */
+		height: 100vh;
+		overflow: hidden;
+		@apply bg-black text-arduino-text font-sans antialiased m-0 p-0;
+	}
+
+	/* Custom Scrollbar for OLED */
+	::-webkit-scrollbar {
+		width: 8px;
+		height: 8px;
+	}
+
+	::-webkit-scrollbar-track {
+		background: #000000;
+	}
+
+	::-webkit-scrollbar-thumb {
+		background: #1a1a1a;
+		border-radius: 4px;
+	}
+
+	::-webkit-scrollbar-thumb:hover {
+		background: #333333;
+	}
+}
+
+@layer components {
+	.oled-card {
+		@apply bg-arduino-surface border border-arduino-border rounded-xl overflow-hidden;
+	}
+
+	.oled-btn {
+		@apply bg-[#111111] hover:bg-[#1f1f1f] border border-[#222222] text-arduino-text px-4 py-2 rounded-lg transition-colors duration-150 flex items-center justify-center gap-2;
+	}
+
+	.oled-btn-primary {
+		@apply bg-arduino-teal-dark hover:bg-arduino-teal text-white border border-arduino-teal px-4 py-2 rounded-lg transition-colors duration-150 flex items-center justify-center gap-2;
+	}
+
+	.oled-input {
+		@apply bg-[#050505] border border-[#222222] hover:border-[#333333] focus:border-[#00979C] text-arduino-text px-4 py-2 rounded-lg outline-none transition-colors w-full focus:ring-1 focus:ring-[#00979C];
+	}
+}
