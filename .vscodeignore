@@ -1,10 +1,16 @@
 .vscode/**
 .vscode-test/**
+.github/**
 out/**
 node_modules/**
 **/node_modules/**
 src/**
+webview/**
+docs/**
 .gitignore
+.gitattributes
+biome.jsonc
+.vscodeignore
 .yarnrc
 esbuild.js
 vsc-extension-quickstart.md
@@ -13,3 +19,6 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 **/.vscode-test.*
+GEMINI.md
+SECURITY.md
+CONTRIBUTING.md
