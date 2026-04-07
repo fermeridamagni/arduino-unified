@@ -1,0 +1,135 @@
+name: 🐛 Bug Report
+description: Report a bug or unexpected behavior
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out the information below to help us diagnose and fix the issue.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: Tell us what went wrong...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior
+      placeholder: |
+        1. Open sketch '...'
+        2. Select board '...'
+        3. Click on compile
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen
+      placeholder: The sketch should compile successfully...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened
+      placeholder: Got compilation error...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Extension Version
+      description: Which version of Arduino Unified are you using?
+      placeholder: e.g., 1.0.0
+    validations:
+      required: true
+
+  - type: input
+    id: vscode-version
+    attributes:
+      label: VS Code Version
+      description: Which version of VS Code are you using?
+      placeholder: e.g., 1.85.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      description: Which operating system are you using?
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Ubuntu/Debian
+        - Fedora/RHEL
+        - Arch Linux
+        - Other Linux
+    validations:
+      required: true
+
+  - type: input
+    id: os-version
+    attributes:
+      label: OS Version
+      description: Specific OS version
+      placeholder: e.g., macOS 14.2, Windows 11 23H2, Ubuntu 22.04
+    validations:
+      required: true
+
+  - type: input
+    id: board
+    attributes:
+      label: Arduino Board
+      description: Which Arduino board are you using? (if applicable)
+      placeholder: e.g., Arduino UNO, ESP32 DevKit, Arduino Nano
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Include relevant logs from:
+        - Arduino Unified Output channel (View > Output > Arduino Unified)
+        - VS Code Developer Console (Help > Toggle Developer Tools)
+      render: shell
+      placeholder: Paste logs here...
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Add any other context, screenshots, or information about the problem
+      placeholder: |
+        - Configuration settings
+        - Screenshots
+        - Related issues
+        - Workarounds you've tried
+
+  - type: checkboxes
+    id: search
+    attributes:
+      label: Pre-submission Checklist
+      description: Please confirm the following
+      options:
+        - label: I have searched existing issues to ensure this is not a duplicate
+          required: true
+        - label: I have updated to the latest version of the extension
+          required: true
+        - label: I have read the documentation and troubleshooting guide
+          required: false

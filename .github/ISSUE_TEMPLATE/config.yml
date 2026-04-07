@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 GitHub Discussions
+    url: https://github.com/fermeridamagni/arduino-unified/discussions
+    about: Ask questions and discuss ideas with the community
+  - name: 📖 Documentation
+    url: https://github.com/fermeridamagni/arduino-unified/wiki
+    about: Read the documentation and guides
+  - name: 🔒 Security Vulnerability
+    url: https://github.com/fermeridamagni/arduino-unified/security/advisories/new
+    about: Report a security vulnerability privately

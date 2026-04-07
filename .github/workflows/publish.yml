@@ -1,0 +1,142 @@
+name: Publish Extension
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install webview dependencies
+        run: cd webview && pnpm install --frozen-lockfile
+
+      - name: Check types
+        run: pnpm run check-types
+
+      - name: Lint code
+        run: pnpm run check
+
+      - name: Build extension
+        run: pnpm run package
+
+      - name: Verify build output
+        run: |
+          ls -lh dist/
+          echo "Extension bundle size:"
+          du -h dist/extension.js
+
+      - name: Install vsce (VS Code Extension CLI)
+        run: npm install -g @vscode/vsce
+
+      - name: Install ovsx (Open VSX CLI)
+        run: npm install -g ovsx
+
+      - name: Package extension
+        run: vsce package
+
+      - name: Get package info
+        id: package
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          echo "version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
+          echo "name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+          echo "vsix=${PACKAGE_NAME}-${PACKAGE_VERSION}.vsix" >> $GITHUB_OUTPUT
+
+      - name: Verify version matches release tag
+        run: |
+          RELEASE_TAG="${{ github.event.release.tag_name }}"
+          PACKAGE_VERSION="${{ steps.package.outputs.version }}"
+
+          # Remove 'v' prefix from tag if present
+          CLEAN_TAG="${RELEASE_TAG#v}"
+
+          if [ "$CLEAN_TAG" != "$PACKAGE_VERSION" ]; then
+            echo "❌ Version mismatch!"
+            echo "Release tag: $RELEASE_TAG (cleaned: $CLEAN_TAG)"
+            echo "Package version: $PACKAGE_VERSION"
+            exit 1
+          fi
+
+          echo "✅ Version verified: $PACKAGE_VERSION"
+
+      - name: Publish to VS Code Marketplace
+        if: ${{ !github.event.release.prerelease }}
+        run: vsce publish --packagePath ${{ steps.package.outputs.vsix }}
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+      - name: Publish pre-release to VS Code Marketplace
+        if: ${{ github.event.release.prerelease }}
+        run: vsce publish --pre-release --packagePath ${{ steps.package.outputs.vsix }}
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+      - name: Publish to Open VSX Registry
+        if: ${{ !github.event.release.prerelease }}
+        run: ovsx publish ${{ steps.package.outputs.vsix }} -p ${{ secrets.OVSX_PAT }}
+        continue-on-error: true
+
+      - name: Upload VSIX to release assets
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./${{ steps.package.outputs.vsix }}
+          asset_name: ${{ steps.package.outputs.vsix }}
+          asset_content_type: application/zip
+
+      - name: Publication summary
+        run: |
+          echo "## 🚀 Publication Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Extension:** ${{ steps.package.outputs.name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ steps.package.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**VSIX File:** ${{ steps.package.outputs.vsix }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Published to:" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ VS Code Marketplace" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Open VSX Registry" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ GitHub Release Assets" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Links:" >> $GITHUB_STEP_SUMMARY
+          echo "- [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=fermeridamagni.arduino-unified)" >> $GITHUB_STEP_SUMMARY
+          echo "- [Open VSX Registry](https://open-vsx.org/extension/fermeridamagni/arduino-unified)" >> $GITHUB_STEP_SUMMARY
+          echo "- [GitHub Release](${{ github.event.release.html_url }})" >> $GITHUB_STEP_SUMMARY
