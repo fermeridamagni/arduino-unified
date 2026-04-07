@@ -1,0 +1,415 @@
+{
+  "name": "arduino-unified",
+  "displayName": "Arduino Unified",
+  "description": "Arduino Unified streamlines your workflow by automating the installation of the official toolchain—including Arduino CLI, Language Server, and Clangd—providing a true out-of-the-box experience. No more fragmented extensions or complex configurations; just pure, efficient coding for your hardware projects.",
+  "version": "0.0.1",
+  "publisher": "fermeridamagni",
+  "license": "GPL-3.0",
+  "icon": "resources/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fermeridamagni/arduino-unified"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Debuggers",
+    "Formatters",
+    "Other"
+  ],
+  "keywords": [
+    "arduino",
+    "embedded",
+    "iot",
+    "microcontroller",
+    "serial",
+    "esp32",
+    "esp8266",
+    "avr",
+    "hardware"
+  ],
+  "activationEvents": [
+    "onLanguage:cpp",
+    "workspaceContains:**/*.ino",
+    "workspaceContains:**/*.pde"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "arduinoUnified.compile",
+        "title": "Arduino Unified: Compile Sketch",
+        "icon": "$(check)"
+      },
+      {
+        "command": "arduinoUnified.upload",
+        "title": "Arduino Unified: Upload Sketch",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "arduinoUnified.uploadUsingProgrammer",
+        "title": "Arduino Unified: Upload Using Programmer"
+      },
+      {
+        "command": "arduinoUnified.burnBootloader",
+        "title": "Arduino Unified: Burn Bootloader"
+      },
+      {
+        "command": "arduinoUnified.exportBinary",
+        "title": "Arduino Unified: Export Compiled Binary"
+      },
+      {
+        "command": "arduinoUnified.selectBoard",
+        "title": "Arduino Unified: Select Board & Port",
+        "icon": "$(circuit-board)"
+      },
+      {
+        "command": "arduinoUnified.selectPort",
+        "title": "Arduino Unified: Select Port"
+      },
+      {
+        "command": "arduinoUnified.newSketch",
+        "title": "Arduino Unified: New Sketch",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "arduinoUnified.openRecentSketch",
+        "title": "Arduino Unified: Open Recent Sketch"
+      },
+      {
+        "command": "arduinoUnified.archiveSketch",
+        "title": "Arduino Unified: Archive Sketch"
+      },
+      {
+        "command": "arduinoUnified.saveSketchAs",
+        "title": "Arduino Unified: Save Sketch As..."
+      },
+      {
+        "command": "arduinoUnified.openSerialMonitor",
+        "title": "Arduino Unified: Open Serial Monitor",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "arduinoUnified.closeSerialMonitor",
+        "title": "Arduino Unified: Close Serial Monitor"
+      },
+      {
+        "command": "arduinoUnified.changeBaudRate",
+        "title": "Arduino Unified: Change Baud Rate"
+      },
+      {
+        "command": "arduinoUnified.installLibrary",
+        "title": "Arduino Unified: Install Library"
+      },
+      {
+        "command": "arduinoUnified.installPlatform",
+        "title": "Arduino Unified: Install Board Platform"
+      },
+      {
+        "command": "arduinoUnified.startDebug",
+        "title": "Arduino Unified: Start Debugging",
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "arduinoUnified.checkDebugSupport",
+        "title": "Arduino Unified: Check Debug Support"
+      },
+      {
+        "command": "arduinoUnified.showOutput",
+        "title": "Arduino Unified: Show Output"
+      }
+    ],
+    "configuration": {
+      "title": "Arduino Unified",
+      "properties": {
+        "arduinoUnified.cli.path": {
+          "type": "string",
+          "default": "",
+          "description": "Custom path to arduino-cli binary. Leave empty to auto-download and manage."
+        },
+        "arduinoUnified.cli.version": {
+          "type": "string",
+          "default": "1.4.1",
+          "description": "Arduino CLI version to auto-download when no custom path is set."
+        },
+        "arduinoUnified.compile.verbose": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show verbose output during compilation."
+        },
+        "arduinoUnified.compile.warnings": {
+          "type": "string",
+          "default": "none",
+          "enum": [
+            "none",
+            "default",
+            "more",
+            "all"
+          ],
+          "enumDescriptions": [
+            "No warnings",
+            "Default compiler warnings",
+            "More warnings",
+            "All warnings"
+          ],
+          "description": "Compiler warning level."
+        },
+        "arduinoUnified.compile.optimizeForDebug": {
+          "type": "boolean",
+          "default": false,
+          "description": "Optimize compilation output for debugging (disables optimizations)."
+        },
+        "arduinoUnified.upload.verbose": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show verbose output during upload."
+        },
+        "arduinoUnified.upload.verify": {
+          "type": "boolean",
+          "default": false,
+          "description": "Verify uploaded binary after upload completes."
+        },
+        "arduinoUnified.upload.autoVerify": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically compile sketch before uploading."
+        },
+        "arduinoUnified.sketchbook.path": {
+          "type": "string",
+          "default": "",
+          "description": "Path to Arduino sketchbook folder. Leave empty for default location."
+        },
+        "arduinoUnified.boardManager.additionalUrls": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional board manager URLs for 3rd-party platforms (e.g., ESP32, STM32).",
+          "markdownDescription": "Additional board manager URLs for 3rd-party platforms.\n\nCommon URLs:\n- ESP32: `https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json`\n- ESP8266: `http://arduino.esp8266.com/stable/package_esp8266com_index.json`\n- STM32: `https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json`"
+        },
+        "arduinoUnified.monitor.baudRate": {
+          "type": "number",
+          "default": 9600,
+          "enum": [
+            300,
+            1200,
+            2400,
+            4800,
+            9600,
+            19200,
+            38400,
+            57600,
+            115200,
+            230400,
+            460800,
+            921600
+          ],
+          "description": "Default baud rate for the serial monitor."
+        },
+        "arduinoUnified.monitor.lineEnding": {
+          "type": "string",
+          "default": "nl",
+          "enum": [
+            "none",
+            "nl",
+            "cr",
+            "nlcr"
+          ],
+          "enumDescriptions": [
+            "No line ending",
+            "Newline (\\n)",
+            "Carriage return (\\r)",
+            "Both (\\r\\n)"
+          ],
+          "description": "Line ending to append when sending serial data."
+        },
+        "arduinoUnified.monitor.autoScroll": {
+          "type": "boolean",
+          "default": true,
+          "description": "Auto-scroll serial monitor output."
+        },
+        "arduinoUnified.monitor.timestamp": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show timestamps in serial monitor output."
+        },
+        "arduinoUnified.formatter.path": {
+          "type": "string",
+          "default": "",
+          "description": "Custom path to clang-format binary for code formatting."
+        },
+        "arduinoUnified.languageServer.path": {
+          "type": "string",
+          "default": "",
+          "description": "Custom path to arduino-language-server binary."
+        },
+        "arduinoUnified.clangd.path": {
+          "type": "string",
+          "default": "",
+          "description": "Custom path to clangd binary."
+        },
+        "arduinoUnified.sketch.template": {
+          "type": "string",
+          "default": "void setup() {\n  // put your setup code here, to run once:\n}\n\nvoid loop() {\n  // put your main code here, to run repeatedly:\n}\n",
+          "editPresentation": "multilineText",
+          "description": "Template content for new Arduino sketches."
+        }
+      }
+    },
+    "languages": [
+      {
+        "id": "ino",
+        "aliases": [
+          "Arduino",
+          "arduino"
+        ],
+        "extensions": [
+          ".ino",
+          ".pde"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "arduinoUnified.compile",
+          "when": "resourceExtname == .ino",
+          "group": "navigation@1"
+        },
+        {
+          "command": "arduinoUnified.upload",
+          "when": "resourceExtname == .ino",
+          "group": "navigation@2"
+        },
+        {
+          "command": "arduinoUnified.openSerialMonitor",
+          "when": "resourceExtname == .ino",
+          "group": "navigation@3"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "arduinoUnified.compile"
+        },
+        {
+          "command": "arduinoUnified.upload"
+        },
+        {
+          "command": "arduinoUnified.selectBoard"
+        },
+        {
+          "command": "arduinoUnified.openSerialMonitor"
+        }
+      ]
+    },
+    "chatParticipants": [
+      {
+        "id": "arduino-unified.arduino",
+        "fullName": "Arduino Unified Assistant",
+        "name": "arduino",
+        "description": "AI-powered Arduino programming assistant. Ask about code, boards, libraries, wiring, and debugging.",
+        "isSticky": true
+      }
+    ],
+    "languageModelTools": [
+      {
+        "name": "arduino_compile",
+        "toolReferenceName": "arduino_compile",
+        "displayName": "Compile Arduino Sketch",
+        "modelDescription": "Compile the current Arduino sketch and return any errors, warnings, and memory usage information.",
+        "canBeReferencedInPrompt": true,
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "arduino_board_info",
+        "toolReferenceName": "arduino_board_info",
+        "displayName": "Get Arduino Board Info",
+        "modelDescription": "Get information about the currently selected Arduino board including pin mappings, configuration options, and available programmers.",
+        "canBeReferencedInPrompt": true,
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "arduino_library_search",
+        "toolReferenceName": "arduino_library_search",
+        "displayName": "Search Arduino Libraries",
+        "modelDescription": "Search the Arduino library registry for libraries matching a query.",
+        "canBeReferencedInPrompt": true,
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Search query for library name or keyword"
+            }
+          },
+          "required": [
+            "query"
+          ]
+        }
+      },
+      {
+        "name": "arduino_serial_read",
+        "toolReferenceName": "arduino_serial_read",
+        "displayName": "Read Arduino Serial Output",
+        "modelDescription": "Read recent serial monitor output from the connected Arduino board.",
+        "canBeReferencedInPrompt": true,
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "pnpm run package",
+    "compile-webview": "cd webview && pnpm run build",
+    "compile": "pnpm run compile-webview && pnpm run check-types && pnpm run check && node esbuild.js",
+    "watch": "npm-run-all -p watch:*",
+    "watch:webview": "cd webview && pnpm run build --watch",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package": "pnpm run check-types && pnpm run check && node esbuild.js --production",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "pnpm run compile-tests && pnpm run compile && pnpm run check",
+    "check-types": "tsc --noEmit",
+    "lint": "ultracite check",
+    "test": "vscode-test",
+    "check": "ultracite check",
+    "fix": "ultracite fix"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.10",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "@types/vscode": "^1.110.0",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
+    "esbuild": "^0.27.3",
+    "eslint": "^9.39.3",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.56.1",
+    "ultracite": "7.4.3"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.14.3",
+    "@grpc/proto-loader": "^0.8.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "protobufjs"
+    ]
+  }
+}
