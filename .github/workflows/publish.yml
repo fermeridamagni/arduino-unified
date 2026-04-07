@@ -68,7 +68,7 @@ jobs:
         run: npm install -g ovsx
 
       - name: Package extension
-        run: vsce package
+        run: vsce package --no-dependencies
 
       - name: Get package info
         id: package

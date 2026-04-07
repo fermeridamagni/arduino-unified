@@ -98,7 +98,7 @@ npm install -g ovsx
 pnpm run package
 
 # Package the extension
-vsce package
+vsce package --no-dependencies
 
 # Publish to VS Code Marketplace
 vsce publish -p YOUR_VSCE_PAT
