@@ -4,6 +4,17 @@ All notable changes to the "arduino-unified" extension will be documented in thi
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [1.1.0] - 2026-04-08
+
+### ✨ Features
+- Add new Arduino tools for upload, serial write, and board selection
+  - Introduced `arduino_upload`, `arduino_serial_write`, and `arduino_select_board` Language Model Tools for enhanced Copilot integration
+  - Improved upload command error handling and serial monitor write capabilities
+- Enhance search functionality and improve package metadata handling
+  - Better library search in Library Manager with improved metadata handling in webview
+- Enhance library info handling for webview with installation status
+  - Improved library information retrieval with installation status tracking in webview explorer
+
 ## [1.0.1] - 2026-04-07
 
 ### 🐛 Bug Fixes
