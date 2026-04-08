@@ -69,6 +69,14 @@ export function registerUploadCommands(
 }
 
 /**
+ * Upload result for AI tools.
+ */
+interface UploadResult {
+  errors?: Array<{ file: string; line: number; message: string }>;
+  success: boolean;
+}
+
+/**
  * Uploads the current sketch to the selected board.
  */
 async function uploadSketch(
@@ -79,7 +87,7 @@ async function uploadSketch(
   discovery: BoardDiscoveryService,
   outputChannel: vscode.OutputChannel,
   diagnosticCollection: vscode.DiagnosticCollection
-): Promise<void> {
+): Promise<UploadResult | null> {
   const selection = selector.getSelection();
 
   if (!selection.fqbn) {
@@ -93,7 +101,7 @@ async function uploadSketch(
           vscode.commands.executeCommand("arduinoUnified.selectBoard");
         }
       });
-    return;
+    return null;
   }
 
   if (!selection.portAddress) {
@@ -107,7 +115,7 @@ async function uploadSketch(
           vscode.commands.executeCommand("arduinoUnified.selectPort");
         }
       });
-    return;
+    return null;
   }
 
   const sketchPath = getSketchPath();
@@ -115,7 +123,7 @@ async function uploadSketch(
     await vscode.window.showErrorMessage(
       "No sketch file open. Open an .ino file first."
     );
-    return;
+    return null;
   }
 
   // Auto-verify (compile) before upload if enabled
@@ -129,7 +137,7 @@ async function uploadSketch(
       diagnosticCollection
     );
     if (!compileResult?.success) {
-      return; // Compile failed, abort upload
+      return null; // Compile failed, abort upload
     }
   }
 
@@ -160,7 +168,7 @@ async function uploadSketch(
         vscode.window.showErrorMessage(`Rename failed: ${e}`);
       }
     }
-    return;
+    return null;
   }
 
   outputChannel.show(true);
@@ -214,11 +222,16 @@ async function uploadSketch(
     );
 
     await vscode.window.showInformationMessage("Upload successful!");
+    return { success: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     outputChannel.appendLine("");
     outputChannel.appendLine(`❌ Upload failed: ${message}`);
     await vscode.window.showErrorMessage(`Upload failed: ${message}`);
+    return {
+      success: false,
+      errors: [{ file: "", line: 0, message }],
+    };
   } finally {
     // Resume board discovery
     discovery.resume(client);

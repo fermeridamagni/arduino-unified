@@ -193,6 +193,16 @@ export class ArduinoSerialMonitor implements vscode.Disposable {
   }
 
   /**
+   * Writes data to the serial monitor (e.g. from Plotter).
+   */
+  write(data: string): void {
+    if (this.connected && this.monitorConnection) {
+      const encoded = new TextEncoder().encode(data);
+      this.monitorConnection.write(encoded);
+    }
+  }
+
+  /**
    * Registers serial monitor commands.
    */
   private registerCommands(): void {

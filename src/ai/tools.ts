@@ -88,6 +88,127 @@ export function registerChatTools(
     })
   );
 
+  // Tool: arduino_upload
+  context.subscriptions.push(
+    vscode.lm.registerTool("arduino_upload", {
+      async invoke(
+        _options: vscode.LanguageModelToolInvocationOptions<unknown>,
+        _token: vscode.CancellationToken
+      ): Promise<vscode.LanguageModelToolResult> {
+        try {
+          const result = await vscode.commands.executeCommand(
+            "arduinoUnified.upload"
+          );
+
+          const uploadResult = result as {
+            success: boolean;
+            errors?: Array<{ file: string; line: number; message: string }>;
+          } | null;
+
+          if (!uploadResult) {
+            return new vscode.LanguageModelToolResult([
+              new vscode.LanguageModelTextPart(
+                "Upload was not started. Make sure a sketch is open and a board is selected."
+              ),
+            ]);
+          }
+
+          const summary = uploadResult.success
+            ? "Upload successful!"
+            : `Upload failed with ${uploadResult.errors?.length ?? 0} error(s).`;
+
+          let details = summary;
+
+          if (uploadResult.errors && uploadResult.errors.length > 0) {
+            details += "\n\nErrors:\n";
+            for (const err of uploadResult.errors) {
+              details += `- ${err.file}:${err.line}: ${err.message}\n`;
+            }
+          }
+
+          return new vscode.LanguageModelToolResult([
+            new vscode.LanguageModelTextPart(details),
+          ]);
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          return new vscode.LanguageModelToolResult([
+            new vscode.LanguageModelTextPart(`Upload error: ${message}`),
+          ]);
+        }
+      },
+    })
+  );
+
+  // Tool: arduino_serial_write
+  context.subscriptions.push(
+    vscode.lm.registerTool("arduino_serial_write", {
+      async invoke(
+        options: vscode.LanguageModelToolInvocationOptions<unknown>,
+        _token: vscode.CancellationToken
+      ): Promise<vscode.LanguageModelToolResult> {
+        const input = options.input as { data?: string } | undefined;
+        const data = input?.data ?? "";
+
+        if (!data) {
+          return new vscode.LanguageModelToolResult([
+            new vscode.LanguageModelTextPart(
+              "Please provide data to write to the serial port."
+            ),
+          ]);
+        }
+
+        try {
+          serialMonitor.write(data);
+          return new vscode.LanguageModelToolResult([
+            new vscode.LanguageModelTextPart(`Sent to serial: ${data}`),
+          ]);
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          return new vscode.LanguageModelToolResult([
+            new vscode.LanguageModelTextPart(`Serial write error: ${message}`),
+          ]);
+        }
+      },
+    })
+  );
+
+  // Tool: arduino_select_board
+  context.subscriptions.push(
+    vscode.lm.registerTool("arduino_select_board", {
+      async invoke(
+        _options: vscode.LanguageModelToolInvocationOptions<unknown>,
+        _token: vscode.CancellationToken
+      ): Promise<vscode.LanguageModelToolResult> {
+        try {
+          await selector.showBoardPicker();
+          const selection = selector.getSelection();
+
+          if (!selection.board) {
+            return new vscode.LanguageModelToolResult([
+              new vscode.LanguageModelTextPart("No board selected."),
+            ]);
+          }
+
+          return new vscode.LanguageModelToolResult([
+            new vscode.LanguageModelTextPart(
+              `Selected board: ${selection.board.name} (${selection.fqbn})`
+            ),
+          ]);
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          return new vscode.LanguageModelToolResult([
+            new vscode.LanguageModelTextPart(
+              `Board selection error: ${message}`
+            ),
+          ]);
+        }
+      },
+    })
+  );
+
   // Tool: arduino_board_info
   context.subscriptions.push(
     vscode.lm.registerTool("arduino_board_info", {

@@ -329,6 +329,47 @@
         }
       },
       {
+        "name": "arduino_upload",
+        "toolReferenceName": "arduino_upload",
+        "displayName": "Upload Arduino Sketch",
+        "modelDescription": "Upload the current Arduino sketch to the selected board and return any errors or warnings.",
+        "canBeReferencedInPrompt": true,
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "arduino_serial_write",
+        "toolReferenceName": "arduino_serial_write",
+        "displayName": "Write to Arduino Serial",
+        "modelDescription": "Send data to the connected Arduino board's serial port.",
+        "canBeReferencedInPrompt": true,
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "string",
+              "description": "Data to send to the Arduino serial port"
+            }
+          },
+          "required": [
+            "data"
+          ]
+        }
+      },
+      {
+        "name": "arduino_select_board",
+        "toolReferenceName": "arduino_select_board",
+        "displayName": "Select Arduino Board",
+        "modelDescription": "Select the currently active Arduino board and port for compilation and upload.",
+        "canBeReferencedInPrompt": true,
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
         "name": "arduino_board_info",
         "toolReferenceName": "arduino_board_info",
         "displayName": "Get Arduino Board Info",
