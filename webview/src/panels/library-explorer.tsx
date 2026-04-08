@@ -10,6 +10,7 @@ interface LibraryItem {
 	author: string;
 	category: string;
 	installed?: boolean;
+	installedVersion?: string;
 	name: string;
 	sentence: string;
 	version: string;
@@ -22,6 +23,10 @@ export function LibraryExplorer() {
 	const [uninstalling, setUninstalling] = useState<string | null>(null);
 
 	useEffect(() => {
+		// Initial fetch
+		setLoading(true);
+		vscode.postMessage({ type: "LIBRARY_SEARCH", query: "" });
+
 		const handleMessage = (event: MessageEvent) => {
 			const message = event.data;
 			if (message.type === "LIBRARY_SEARCH_RESULTS") {
@@ -31,14 +36,26 @@ export function LibraryExplorer() {
 				setInstalling(null);
 				setResults((prev) =>
 					prev.map((lib) =>
-						lib.name === message.name ? { ...lib, installed: true } : lib,
+						lib.name === message.name
+							? {
+									...lib,
+									installed: true,
+									installedVersion: lib.version,
+								}
+							: lib,
 					),
 				);
 			} else if (message.type === "LIBRARY_UNINSTALL_COMPLETE") {
 				setUninstalling(null);
 				setResults((prev) =>
 					prev.map((lib) =>
-						lib.name === message.name ? { ...lib, installed: false } : lib,
+						lib.name === message.name
+							? {
+									...lib,
+									installed: false,
+									installedVersion: undefined,
+								}
+							: lib,
 					),
 				);
 			}
@@ -48,9 +65,6 @@ export function LibraryExplorer() {
 	}, []);
 
 	const handleSearch = (query: string) => {
-		if (!query.trim()) {
-			return;
-		}
 		setLoading(true);
 		vscode.postMessage({ type: "LIBRARY_SEARCH", query });
 	};
@@ -68,8 +82,6 @@ export function LibraryExplorer() {
 		vscode.postMessage({
 			type: "LIBRARY_UNINSTALL",
 			name: id,
-			// For uninstalling, we pass the current version if we can,
-			// though if we need it we can extract it from the results array.
 			version: results.find((l) => l.name === id)?.version,
 		});
 	};
@@ -80,6 +92,8 @@ export function LibraryExplorer() {
 		version: lib.version,
 		description: lib.sentence,
 		installed: lib.installed,
+		installedVersion: lib.installedVersion,
+		latestVersion: lib.version,
 		metadata: {
 			Author: lib.author,
 			Category: lib.category,

@@ -25,6 +25,19 @@ export interface LibraryInfo {
 }
 
 /**
+ * Simplified library info for webview consumption.
+ */
+export interface LibraryInfoForWebview {
+  author: string;
+  category: string;
+  installed: boolean;
+  installedVersion?: string;
+  name: string;
+  sentence: string;
+  version: string;
+}
+
+/**
  * LibraryManager provides library search, install, uninstall, and listing
  * via the Arduino CLI gRPC service.
  */
@@ -60,13 +73,38 @@ export class LibraryManager {
       switch (message.type) {
         case "LIBRARY_SEARCH": {
           try {
-            const results = await this.search(message.query);
-            panel.webview.postMessage({
-              type: "LIBRARY_SEARCH_RESULTS",
-              data: results,
-            });
+            // For empty queries, show installed libraries (fast)
+            // For non-empty queries, search with limit
+            const query = message.query?.trim() ?? "";
+            if (query) {
+              const results = await this.search(query, 20);
+              panel.webview.postMessage({
+                type: "LIBRARY_SEARCH_RESULTS",
+                data: results.map((lib) => this.toWebviewFormat(lib)),
+              });
+            } else {
+              const installed = await this.listInstalled();
+              panel.webview.postMessage({
+                type: "LIBRARY_SEARCH_RESULTS",
+                data: installed.map((lib) => this.toWebviewFormat(lib)),
+              });
+            }
           } catch (e) {
             this.outputChannel.appendLine(`[Webview] Error searching: ${e}`);
+          }
+          break;
+        }
+        case "LIBRARY_LIST_INSTALLED": {
+          try {
+            const installed = await this.listInstalled();
+            panel.webview.postMessage({
+              type: "LIBRARY_INSTALLED_LIST",
+              data: installed.map((lib) => this.toWebviewFormat(lib)),
+            });
+          } catch (e) {
+            this.outputChannel.appendLine(
+              `[Webview] Error listing installed: ${e}`
+            );
           }
           break;
         }
@@ -96,12 +134,50 @@ export class LibraryManager {
   }
 
   /**
-   * Searches the Arduino library index.
+   * Searches the Arduino library index and merges with installation status.
+   * Limits results to avoid performance issues with large result sets.
    */
   async search(query: string): Promise<LibraryInfo[]> {
+    // Get search results from Arduino library index
     const result = await this.client.librarySearch(query);
     const libraries = (result.libraries ?? []) as Record<string, unknown>[];
-    return libraries.map((lib) => this.parseLibraryInfo(lib));
+
+    // Get list of installed libraries to merge installation status
+    const installed = await this.listInstalled();
+    const installedMap = new Map(
+      installed.map((lib) => [lib.name, lib.installed])
+    );
+
+    // Limit results to avoid performance issues
+    const limitedLibraries = libraries.slice(0, 100);
+
+    // Parse and merge installation status into search results
+    return limitedLibraries.map((lib) => {
+      const parsed = this.parseLibraryInfo(lib);
+      const name = parsed.name;
+
+      // If library is installed, use the installed info from listInstalled
+      if (installedMap.has(name)) {
+        parsed.installed = installedMap.get(name);
+      }
+
+      return parsed;
+    });
+  }
+
+  /**
+   * Converts LibraryInfo to a simplified format for webview.
+   */
+  private toWebviewFormat(lib: LibraryInfo): LibraryInfoForWebview {
+    return {
+      author: lib.author,
+      category: lib.category,
+      installed: !!lib.installed,
+      installedVersion: lib.installed?.version,
+      name: lib.name,
+      sentence: lib.sentence,
+      version: lib.version,
+    };
   }
 
   /**
@@ -119,9 +195,21 @@ export class LibraryManager {
     const installedLibraries = (result.installedLibraries ?? []) as Array<{
       library: Record<string, unknown>;
     }>;
-    return installedLibraries.map((item) =>
-      this.parseLibraryInfo(item.library ?? item)
-    );
+    return installedLibraries.map((item) => {
+      const lib = item.library ?? item;
+      const parsed = this.parseLibraryInfo(lib as Record<string, unknown>);
+      // Libraries from libraryList are always installed
+      // The version in the library object IS the installed version
+      if (!parsed.installed) {
+        parsed.installed = {
+          version: parsed.version,
+          installDir: ((lib as Record<string, unknown>).installDir ??
+            (lib as Record<string, unknown>).install_dir ??
+            "") as string,
+        };
+      }
+      return parsed;
+    });
   }
 
   /**
