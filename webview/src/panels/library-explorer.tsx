@@ -86,19 +86,25 @@ export function LibraryExplorer() {
 		});
 	};
 
-	const items: PackageItem[] = results.map((lib) => ({
-		id: lib.name,
-		name: lib.name,
-		version: lib.version,
-		description: lib.sentence,
-		installed: lib.installed,
-		installedVersion: lib.installedVersion,
-		latestVersion: lib.version,
-		metadata: {
-			Author: lib.author,
-			Category: lib.category,
-		},
-	}));
+	const items: PackageItem[] = results.map((lib) => {
+		// Build metadata object, only including non-empty values
+		const metadata: Record<string, string> = {};
+		metadata.Author = lib.author || "Unknown";
+		if (lib.category) {
+			metadata.Category = lib.category;
+		}
+
+		return {
+			id: lib.name,
+			name: lib.name,
+			version: lib.version || "", // Empty string if no version
+			description: lib.sentence,
+			installed: lib.installed,
+			installedVersion: lib.installedVersion,
+			latestVersion: lib.version || "",
+			metadata,
+		};
+	});
 
 	return (
 		<PackageManager

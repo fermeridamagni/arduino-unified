@@ -137,7 +137,7 @@ export class LibraryManager {
    * Searches the Arduino library index and merges with installation status.
    * Limits results to avoid performance issues with large result sets.
    */
-  async search(query: string): Promise<LibraryInfo[]> {
+  async search(query: string, limit = 100): Promise<LibraryInfo[]> {
     // Get search results from Arduino library index
     const result = await this.client.librarySearch(query);
     const libraries = (result.libraries ?? []) as Record<string, unknown>[];
@@ -149,7 +149,7 @@ export class LibraryManager {
     );
 
     // Limit results to avoid performance issues
-    const limitedLibraries = libraries.slice(0, 100);
+    const limitedLibraries = libraries.slice(0, limit);
 
     // Parse and merge installation status into search results
     return limitedLibraries.map((lib) => {

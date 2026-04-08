@@ -144,23 +144,29 @@ export function PackageManager({
 								className="oled-card flex flex-col justify-between gap-4 p-4 sm:flex-row sm:items-center"
 								key={item.id}
 							>
-								<div className="flex-1">
+								<div className="flex-1 gap-y-2">
 									<div className="flex items-center gap-2">
 										<h3 className="font-semibold text-lg text-white">
 											{item.name}
 										</h3>
+
 										{item.installed && (
 											<span className="rounded-full border border-[#00979C] bg-[#002a2c] px-2 py-0.5 font-bold text-[#00979C] text-[10px] uppercase">
 												Installed
 											</span>
 										)}
 									</div>
+
 									<div className="mb-1 text-[#444] text-[10px] font-mono leading-none tracking-widest uppercase">
 										{item.id}
 									</div>
-									<div className="mb-2 w-max rounded-full border border-[#333] bg-[#111] px-2 py-0.5 text-[#aaa] text-[11px] font-mono">
-										v{item.version}
-									</div>
+
+									{item.version && (
+										<div className="mb-2 w-max rounded-full border border-[#333] bg-[#111] px-2 py-0.5 text-[#aaa] text-[11px] font-mono">
+											v{item.version}
+										</div>
+									)}
+
 									<p className="text-arduino-text-muted text-sm border-l-2 border-[#222] pl-3 my-2 md:pl-4">
 										{item.description}
 									</p>
@@ -195,14 +201,14 @@ export function PackageManager({
 									{item.installed && (
 										<button
 											type="button"
-											className="oled-btn min-w-[90px] disabled:opacity-50 disabled:cursor-not-allowed"
+											className="oled-btn min-w-22.5 disabled:opacity-50 disabled:cursor-not-allowed"
 											disabled={
 												Boolean(uninstallingId) || Boolean(installingId)
 											}
 											onClick={() => onUninstall(item.id)}
 										>
 											{uninstallingId === item.id ? (
-												<div className="h-4 w-4 animate-spin rounded-full border-2 border-[#fff]/30 border-t-[#fff]" />
+												<div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
 											) : (
 												"Uninstall"
 											)}
@@ -210,7 +216,7 @@ export function PackageManager({
 									)}
 									<button
 										type="button"
-										className="oled-btn-primary min-w-[90px] disabled:opacity-50 disabled:cursor-not-allowed"
+										className="oled-btn-primary min-w-22.5 disabled:opacity-50 disabled:cursor-not-allowed"
 										disabled={
 											Boolean(installingId) ||
 											Boolean(uninstallingId) ||
@@ -219,7 +225,7 @@ export function PackageManager({
 										onClick={() => onInstall(item.id, isUpdatable)}
 									>
 										{installingId === item.id ? (
-											<div className="h-4 w-4 animate-spin rounded-full border-2 border-[#fff]/30 border-t-[#fff]" />
+											<div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
 										) : isUpdatable ? (
 											"Update"
 										) : item.installed ? (
