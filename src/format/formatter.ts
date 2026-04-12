@@ -25,6 +25,16 @@ const DEFAULT_CLANG_FORMAT_STYLE = JSON.stringify({
  * ArduinoFormatter provides clang-format based code formatting
  * for .ino, .cpp, .h, and related Arduino files.
  */
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.promises.access(filePath, fs.constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export class ArduinoFormatter
   implements vscode.DocumentFormattingEditProvider, vscode.Disposable
 {
@@ -130,7 +140,7 @@ export class ArduinoFormatter
   private async findClangFormat(): Promise<string | null> {
     // Check user setting
     const settingsPath = this.settings.formatterPath;
-    if (settingsPath && fs.existsSync(settingsPath)) {
+    if (settingsPath && (await fileExists(settingsPath))) {
       return settingsPath;
     }
 
@@ -138,7 +148,7 @@ export class ArduinoFormatter
     try {
       const { stdout } = await execFileAsync("which", ["clang-format"]);
       const systemPath = stdout.trim();
-      if (systemPath && fs.existsSync(systemPath)) {
+      if (systemPath && (await fileExists(systemPath))) {
         return systemPath;
       }
     } catch {
@@ -153,7 +163,7 @@ export class ArduinoFormatter
     ];
 
     for (const p of commonPaths) {
-      if (fs.existsSync(p)) {
+      if (await fileExists(p)) {
         return p;
       }
     }
@@ -171,7 +181,7 @@ export class ArduinoFormatter
     // Walk up directory tree looking for .clang-format
     for (let i = 0; i < 10; i++) {
       const stylePath = path.join(dir, ".clang-format");
-      if (fs.existsSync(stylePath)) {
+      if (await fileExists(stylePath)) {
         return stylePath;
       }
 
