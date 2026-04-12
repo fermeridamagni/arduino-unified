@@ -131,10 +131,12 @@ export function getSupportedVersionRange(): string {
 
 /**
  * Formats version info into a display string for the status bar.
+ * @param info - VersionInfo object
+ * @returns Formatted version string with warning if incompatible
  */
 export function formatVersionDisplay(info: VersionInfo): string {
-  if (info.compatible) {
-    return `Arduino CLI v${info.version}`;
+  if (!info.compatible) {
+    return `${info.version} (⚠️ Unsupported)`;
   }
-  return `Arduino CLI v${info.version} ⚠️`;
+  return info.version;
 }
