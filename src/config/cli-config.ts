@@ -76,7 +76,15 @@ export class ArduinoCliConfig {
 
     const configPath = this.getConfigFilePath();
 
-    if (!fs.existsSync(configPath)) {
+    let configExists = false;
+    try {
+      await fs.promises.access(configPath);
+      configExists = true;
+    } catch {
+      configExists = false;
+    }
+
+    if (!configExists) {
       const config = this.buildConfigYaml();
       await fs.promises.writeFile(configPath, config, "utf8");
       this.outputChannel.appendLine(
