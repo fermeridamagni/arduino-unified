@@ -115,13 +115,26 @@ async function compileSketch(
 
   const fqbn = configStore.getFqbnWithOptions(selection.fqbn);
   // Ensure sketchDir is resolved properly
-  const isDir =
-    fs.existsSync(sketchPath) && fs.statSync(sketchPath).isDirectory();
+  let isDir = false;
+  try {
+    const stat = await fs.promises.stat(sketchPath);
+    isDir = stat.isDirectory();
+  } catch (_e) {
+    // Ignore error
+  }
   const sketchDir = isDir ? sketchPath : path.dirname(sketchPath);
   const folderName = path.basename(sketchDir);
   const expectedMainFile = path.join(sketchDir, `${folderName}.ino`);
 
-  if (!fs.existsSync(expectedMainFile)) {
+  let exists = false;
+  try {
+    await fs.promises.access(expectedMainFile);
+    exists = true;
+  } catch (_e) {
+    // Expected main file doesn't exist
+  }
+
+  if (!exists) {
     const action = await vscode.window.showErrorMessage(
       `Arduino strictly requires the main sketch file to match its folder name. Expected: "${folderName}.ino"`,
       `Rename active file to ${folderName}.ino`
@@ -130,7 +143,7 @@ async function compileSketch(
     if (action && !isDir) {
       // Perform rename of the currently open .ino
       try {
-        fs.renameSync(sketchPath, expectedMainFile);
+        await fs.promises.rename(sketchPath, expectedMainFile);
         // Don't proceed to allow vscode file watchers to catch up, or just proceed
         vscode.window.showInformationMessage(
           `Renamed to ${folderName}.ino! You can now compile.`
