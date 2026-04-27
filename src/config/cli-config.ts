@@ -150,15 +150,17 @@ export class ArduinoCliConfig {
       lines.push(`    - ${url}`);
     }
 
+    // Generate Arduino CLI YAML config
+    // Note: Windows paths must use single quotes to prevent escape sequence parsing issues
     lines.push(
       "",
       "daemon:",
-      '  port: "0"',
+      "  port: 0",
       "",
       "directories:",
-      `  data: "${dataDir}"`,
-      `  downloads: "${path.join(dataDir, "staging")}"`,
-      `  user: "${sketchbookDir}"`,
+      `  data: '${dataDir}'`,
+      `  downloads: '${path.join(dataDir, "staging")}'`,
+      `  user: '${sketchbookDir}'`,
       "",
       "logging:",
       "  level: info",
