@@ -2,10 +2,10 @@ name: Auto Assign
 
 on:
   issues:
-    types: [opened, reopened]
+    types: [ opened, reopened ]
 
-  pull_request:
-    types: [opened, reopened]
+  pull_request_target:
+    types: [ opened, reopened ]
 
 concurrency:
   group: auto-assign-${{ github.ref }} # Group runs by the current ref to avoid conflicts
