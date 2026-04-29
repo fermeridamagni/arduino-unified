@@ -4,6 +4,18 @@ All notable changes to the "arduino-unified" extension will be documented in thi
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [1.1.1] - 2026-04-28
+
+### 🐛 Bug Fixes
+- Fix YAML parsing errors when Arduino CLI config contains Windows paths with backslashes
+  - Changed directory paths in generated `arduino-cli.yaml` to use single quotes
+  - Prevents YAML parser from reinterpreting escape sequences (e.g., `\U`)
+  - Fixes "did not find expected hexdecimal number" parsing errors
+  - Added regression test to verify single-quoted path generation
+
+### 👥 Contributors
+Thanks to [@CharlesWiiFlowers](https://github.com/CharlesWiiFlowers) for this fix!
+
 ## [1.1.0] - 2026-04-08
 
 ### ✨ Features

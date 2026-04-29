@@ -2,7 +2,7 @@
   "name": "arduino-unified",
   "displayName": "Arduino Unified",
   "description": "Arduino Unified streamlines your workflow by automating the installation of the official toolchain—including Arduino CLI, Language Server, and Clangd—providing a true out-of-the-box experience. No more fragmented extensions or complex configurations; just pure, efficient coding for your hardware projects.",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "publisher": "fermeridamagni",
   "license": "GPL-3.0",
   "icon": "resources/icon.png",
