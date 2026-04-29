@@ -127,10 +127,22 @@ export class ArduinoFormatter
    * Finds the clang-format binary.
    * Checks: settings path → bundled → system PATH
    */
+  /**
+   * Async file existence check.
+   */
+  private async fileExists(filePath: string): Promise<boolean> {
+    try {
+      await fs.promises.access(filePath, fs.constants.F_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private async findClangFormat(): Promise<string | null> {
     // Check user setting
     const settingsPath = this.settings.formatterPath;
-    if (settingsPath && fs.existsSync(settingsPath)) {
+    if (settingsPath && (await this.fileExists(settingsPath))) {
       return settingsPath;
     }
 
@@ -138,7 +150,7 @@ export class ArduinoFormatter
     try {
       const { stdout } = await execFileAsync("which", ["clang-format"]);
       const systemPath = stdout.trim();
-      if (systemPath && fs.existsSync(systemPath)) {
+      if (systemPath && (await this.fileExists(systemPath))) {
         return systemPath;
       }
     } catch {
@@ -153,7 +165,7 @@ export class ArduinoFormatter
     ];
 
     for (const p of commonPaths) {
-      if (fs.existsSync(p)) {
+      if (await this.fileExists(p)) {
         return p;
       }
     }
@@ -171,7 +183,7 @@ export class ArduinoFormatter
     // Walk up directory tree looking for .clang-format
     for (let i = 0; i < 10; i++) {
       const stylePath = path.join(dir, ".clang-format");
-      if (fs.existsSync(stylePath)) {
+      if (await this.fileExists(stylePath)) {
         return stylePath;
       }
 
