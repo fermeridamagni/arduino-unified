@@ -39,7 +39,9 @@ export class ArduinoDaemon extends EventEmitter {
 
     try {
       const resolvedPath = this.resolveCliPath(cliPath);
-      if (!fs.existsSync(resolvedPath)) {
+      try {
+        await fs.promises.access(resolvedPath, fs.constants.F_OK);
+      } catch {
         throw new Error(
           `arduino-cli not found at: ${resolvedPath}. ` +
             "Please install it or set the path in settings."
@@ -66,6 +68,13 @@ export class ArduinoDaemon extends EventEmitter {
         let stdoutBuffer = "";
         let portResolved = false;
 
+        const timeoutHandle = setTimeout(() => {
+          if (!portResolved) {
+            proc.kill();
+            reject(new Error("arduino-cli daemon startup timed out (30s)"));
+          }
+        }, 30_000);
+
         proc.stdout?.on("data", (data: Buffer) => {
           const text = data.toString("utf8");
           stdoutBuffer += text;
@@ -78,6 +87,7 @@ export class ArduinoDaemon extends EventEmitter {
               const parsedPort = Number.parseInt(match[1], 10);
               if (!Number.isNaN(parsedPort)) {
                 portResolved = true;
+                clearTimeout(timeoutHandle);
                 resolve(parsedPort);
               }
             }
@@ -92,6 +102,7 @@ export class ArduinoDaemon extends EventEmitter {
         });
 
         proc.on("error", (err) => {
+          clearTimeout(timeoutHandle);
           this.outputChannel.appendLine(
             `[Daemon] Process error: ${err.message}`
           );
@@ -104,6 +115,7 @@ export class ArduinoDaemon extends EventEmitter {
         });
 
         proc.on("exit", (code, signal) => {
+          clearTimeout(timeoutHandle);
           this.outputChannel.appendLine(
             `[Daemon] Process exited (code=${code}, signal=${signal})`
           );
@@ -117,14 +129,6 @@ export class ArduinoDaemon extends EventEmitter {
           this.cleanup();
           this.emit("exit", code, signal);
         });
-
-        // Timeout if daemon doesn't start within 30 seconds
-        setTimeout(() => {
-          if (!portResolved) {
-            proc.kill();
-            reject(new Error("arduino-cli daemon startup timed out (30s)"));
-          }
-        }, 30_000);
       });
 
       this.port = port;

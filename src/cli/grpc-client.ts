@@ -8,30 +8,42 @@ import type * as vscode from "vscode";
  * Represents a gRPC Arduino Core instance.
  * The instance is created by the `Create` RPC and used in subsequent calls.
  */
-interface ArduinoInstance {
+export interface ArduinoInstance {
   instance: { id: number };
 }
 
 /**
  * Progress callback for streaming operations.
  */
-type ProgressCallback = (data: Record<string, unknown>) => void;
+export type ProgressCallback = (data: Record<string, unknown>) => void;
 
 /**
  * Options for streaming RPC calls.
  */
-interface StreamOptions {
+export interface StreamOptions {
   onData?: ProgressCallback;
   onError?: (error: Error) => void;
 }
 
 /**
+ * Generic gRPC service method interface replacing loose object casting.
+ */
+export type GrpcMethodCall = (
+  request: unknown,
+  callback?: (error: grpc.ServiceError | null, response: unknown) => void
+) => grpc.ClientReadableStream<Record<string, unknown>> | undefined;
+
+export interface ArduinoGrpcService {
+  [methodName: string]: GrpcMethodCall;
+}
+
+/**
  * ArduinoGrpcClient provides a typed wrapper around the Arduino CLI gRPC service.
- * Uses dynamic proto loading via @grpc/proto-loader for simplicity.
+ * Uses dynamic proto loading via @grpc/proto-loader with structured TypeScript typing.
  */
 export class ArduinoGrpcClient extends EventEmitter {
   private client: grpc.Client | null = null;
-  private service: Record<string, unknown> | null = null;
+  private service: ArduinoGrpcService | null = null;
   private instance: ArduinoInstance | null = null;
   private readonly outputChannel: vscode.OutputChannel;
   private readonly protoRoot: string;
@@ -41,6 +53,16 @@ export class ArduinoGrpcClient extends EventEmitter {
     this.outputChannel = outputChannel;
     // __dirname is `dist/` at runtime because esbuild bundles everything to dist/extension.js
     this.protoRoot = path.join(__dirname, "proto");
+  }
+
+  /**
+   * Helper to ensure an instance exists before making an RPC call.
+   */
+  private ensureInstance(): ArduinoInstance {
+    if (!this.instance) {
+      throw new Error("No instance created. Call createInstance() first.");
+    }
+    return this.instance;
   }
 
   /**
@@ -80,7 +102,7 @@ export class ArduinoGrpcClient extends EventEmitter {
       grpc.credentials.createInsecure()
     );
 
-    this.service = this.client as unknown as Record<string, unknown>;
+    this.service = this.client as unknown as ArduinoGrpcService;
     this.outputChannel.appendLine(
       `[gRPC] Connected to arduino-cli on port ${port}`
     );
@@ -105,11 +127,9 @@ export class ArduinoGrpcClient extends EventEmitter {
    * Initializes the Arduino Core instance (loads platforms and libraries indexes).
    */
   async initInstance(onProgress?: ProgressCallback): Promise<void> {
-    if (!this.instance) {
-      throw new Error("No instance created. Call createInstance() first.");
-    }
+    const instance = this.ensureInstance();
 
-    await this.serverStreamCall("init", this.instance, {
+    await this.serverStreamCall("init", instance, {
       onData: (data) => {
         const msg = data as {
           message?: string;
@@ -146,10 +166,8 @@ export class ArduinoGrpcClient extends EventEmitter {
    * Updates platform indexes.
    */
   async updateIndex(onProgress?: ProgressCallback): Promise<void> {
-    if (!this.instance) {
-      throw new Error("No instance available");
-    }
-    await this.serverStreamCall("updateIndex", this.instance, {
+    const instance = this.ensureInstance();
+    await this.serverStreamCall("updateIndex", instance, {
       onData: onProgress,
     });
   }
@@ -158,10 +176,8 @@ export class ArduinoGrpcClient extends EventEmitter {
    * Updates library indexes.
    */
   async updateLibrariesIndex(onProgress?: ProgressCallback): Promise<void> {
-    if (!this.instance) {
-      throw new Error("No instance available");
-    }
-    await this.serverStreamCall("updateLibrariesIndex", this.instance, {
+    const instance = this.ensureInstance();
+    await this.serverStreamCall("updateLibrariesIndex", instance, {
       onData: onProgress,
     });
   }
@@ -180,15 +196,13 @@ export class ArduinoGrpcClient extends EventEmitter {
     },
     onProgress?: ProgressCallback
   ): Promise<Record<string, unknown>> {
-    if (!this.instance) {
-      throw new Error("No instance available");
-    }
+    const instance = this.ensureInstance();
 
     let result: Record<string, unknown> = {};
     await this.serverStreamCall(
       "compile",
       {
-        ...this.instance,
+        ...instance,
         sketchPath: request.sketchPath,
         fqbn: request.fqbn,
         verbose: request.verbose ?? false,
@@ -235,15 +249,13 @@ export class ArduinoGrpcClient extends EventEmitter {
     },
     onProgress?: ProgressCallback
   ): Promise<Record<string, unknown>> {
-    if (!this.instance) {
-      throw new Error("No instance available");
-    }
+    const instance = this.ensureInstance();
 
     let result: Record<string, unknown> = {};
     await this.serverStreamCall(
       "upload",
       {
-        ...this.instance,
+        ...instance,
         sketchPath: request.sketchPath,
         fqbn: request.fqbn,
         port: request.port,
@@ -290,15 +302,13 @@ export class ArduinoGrpcClient extends EventEmitter {
     },
     onProgress?: ProgressCallback
   ): Promise<Record<string, unknown>> {
-    if (!this.instance) {
-      throw new Error("No instance available");
-    }
+    const instance = this.ensureInstance();
 
     let result: Record<string, unknown> = {};
     await this.serverStreamCall(
       "uploadUsingProgrammer",
       {
-        ...this.instance,
+        ...instance,
         sketchPath: request.sketchPath,
         fqbn: request.fqbn,
         port: request.port,
@@ -333,14 +343,12 @@ export class ArduinoGrpcClient extends EventEmitter {
     },
     onProgress?: ProgressCallback
   ): Promise<void> {
-    if (!this.instance) {
-      throw new Error("No instance available");
-    }
+    const instance = this.ensureInstance();
 
     await this.serverStreamCall(
       "burnBootloader",
       {
-        ...this.instance,
+        ...instance,
         fqbn: request.fqbn,
         port: request.port,
         programmer: request.programmer,
@@ -359,13 +367,17 @@ export class ArduinoGrpcClient extends EventEmitter {
     onEvent: (event: Record<string, unknown>) => void,
     onError?: (error: Error) => void
   ): () => void {
-    if (!(this.service && this.instance)) {
-      throw new Error("Client not connected or no instance");
+    if (!this.service) {
+      throw new Error("Client not connected");
+    }
+    const instance = this.ensureInstance();
+
+    const fn = this.service.boardListWatch;
+    if (typeof fn !== "function") {
+      throw new Error("Unknown gRPC method: boardListWatch");
     }
 
-    const call = (
-      this.service as Record<string, CallableFunction>
-    ).boardListWatch(this.instance) as grpc.ClientReadableStream<
+    const call = fn.call(this.service, instance) as grpc.ClientReadableStream<
       Record<string, unknown>
     >;
 
@@ -383,31 +395,25 @@ export class ArduinoGrpcClient extends EventEmitter {
    * Lists currently connected boards.
    */
   async boardList(): Promise<Record<string, unknown>> {
-    if (!this.instance) {
-      throw new Error("No instance available");
-    }
-    return this.unaryCall("boardList", this.instance);
+    const instance = this.ensureInstance();
+    return this.unaryCall("boardList", instance);
   }
 
   /**
    * Gets details for a specific board by FQBN.
    */
   async boardDetails(fqbn: string): Promise<Record<string, unknown>> {
-    if (!this.instance) {
-      throw new Error("No instance available");
-    }
-    return this.unaryCall("boardDetails", { ...this.instance, fqbn });
+    const instance = this.ensureInstance();
+    return this.unaryCall("boardDetails", { ...instance, fqbn });
   }
 
   /**
    * Lists all known boards across all installed platforms.
    */
   async boardListAll(searchArgs?: string): Promise<Record<string, unknown>> {
-    if (!this.instance) {
-      throw new Error("No instance available");
-    }
+    const instance = this.ensureInstance();
     return this.unaryCall("boardListAll", {
-      ...this.instance,
+      ...instance,
       searchArgs: searchArgs ?? "",
     });
   }
@@ -416,11 +422,9 @@ export class ArduinoGrpcClient extends EventEmitter {
    * Searches boards.
    */
   async boardSearch(searchArgs?: string): Promise<Record<string, unknown>> {
-    if (!this.instance) {
-      throw new Error("No instance available");
-    }
+    const instance = this.ensureInstance();
     return this.unaryCall("boardSearch", {
-      ...this.instance,
+      ...instance,
       searchArgs: searchArgs ?? "",
     });
   }
@@ -429,11 +433,9 @@ export class ArduinoGrpcClient extends EventEmitter {
    * Searches for platforms.
    */
   async platformSearch(searchArgs?: string): Promise<Record<string, unknown>> {
-    if (!this.instance) {
-      throw new Error("No instance available");
-    }
+    const instance = this.ensureInstance();
     return this.unaryCall("platformSearch", {
-      ...this.instance,
+      ...instance,
       searchArgs: searchArgs ?? "",
       manuallyInstalled: true,
     });
@@ -448,13 +450,11 @@ export class ArduinoGrpcClient extends EventEmitter {
     version?: string,
     onProgress?: ProgressCallback
   ): Promise<void> {
-    if (!this.instance) {
-      throw new Error("No instance available");
-    }
+    const instance = this.ensureInstance();
     await this.serverStreamCall(
       "platformInstall",
       {
-        ...this.instance,
+        ...instance,
         platformPackage,
         architecture,
         version: version ?? "",
@@ -471,13 +471,11 @@ export class ArduinoGrpcClient extends EventEmitter {
     architecture: string,
     onProgress?: ProgressCallback
   ): Promise<void> {
-    if (!this.instance) {
-      throw new Error("No instance available");
-    }
+    const instance = this.ensureInstance();
     await this.serverStreamCall(
       "platformUninstall",
       {
-        ...this.instance,
+        ...instance,
         platformPackage,
         architecture,
       },
@@ -489,11 +487,9 @@ export class ArduinoGrpcClient extends EventEmitter {
    * Searches libraries.
    */
   async librarySearch(query: string): Promise<Record<string, unknown>> {
-    if (!this.instance) {
-      throw new Error("No instance available");
-    }
+    const instance = this.ensureInstance();
     return this.unaryCall("librarySearch", {
-      ...this.instance,
+      ...instance,
       searchArgs: query,
     });
   }
@@ -506,11 +502,9 @@ export class ArduinoGrpcClient extends EventEmitter {
     all?: boolean;
     fqbn?: string;
   }): Promise<Record<string, unknown>> {
-    if (!this.instance) {
-      throw new Error("No instance available");
-    }
+    const instance = this.ensureInstance();
     return this.unaryCall("libraryList", {
-      ...this.instance,
+      ...instance,
       updatable: options?.updatable ?? false,
       all: options?.all ?? false,
       fqbn: options?.fqbn ?? "",
@@ -525,13 +519,11 @@ export class ArduinoGrpcClient extends EventEmitter {
     version?: string,
     onProgress?: ProgressCallback
   ): Promise<void> {
-    if (!this.instance) {
-      throw new Error("No instance available");
-    }
+    const instance = this.ensureInstance();
     await this.serverStreamCall(
       "libraryInstall",
       {
-        ...this.instance,
+        ...instance,
         name,
         version: version ?? "",
       },
@@ -547,13 +539,11 @@ export class ArduinoGrpcClient extends EventEmitter {
     version: string,
     onProgress?: ProgressCallback
   ): Promise<void> {
-    if (!this.instance) {
-      throw new Error("No instance available");
-    }
+    const instance = this.ensureInstance();
     await this.serverStreamCall(
       "libraryUninstall",
       {
-        ...this.instance,
+        ...instance,
         name,
         version,
       },
@@ -568,11 +558,9 @@ export class ArduinoGrpcClient extends EventEmitter {
     name: string,
     version?: string
   ): Promise<Record<string, unknown>> {
-    if (!this.instance) {
-      throw new Error("No instance available");
-    }
+    const instance = this.ensureInstance();
     return this.unaryCall("libraryResolveDependencies", {
-      ...this.instance,
+      ...instance,
       name,
       version: version ?? "",
     });
@@ -622,11 +610,9 @@ export class ArduinoGrpcClient extends EventEmitter {
     port: { address: string; protocol: string },
     fqbn: string
   ): Promise<Record<string, unknown>> {
-    if (!this.instance) {
-      throw new Error("No instance available");
-    }
+    const instance = this.ensureInstance();
     return this.unaryCall("enumerateMonitorPortSettings", {
-      ...this.instance,
+      ...instance,
       port,
       fqbn,
     });
@@ -645,20 +631,28 @@ export class ArduinoGrpcClient extends EventEmitter {
     onData: (callback: (data: Uint8Array) => void) => void;
     cancel: () => void;
   } {
-    if (!(this.service && this.instance)) {
-      throw new Error("Client not connected or no instance");
+    if (!this.service) {
+      throw new Error("Client not connected");
+    }
+    const instance = this.ensureInstance();
+
+    const fn = this.service.monitor;
+    if (typeof fn !== "function") {
+      throw new Error("Unknown gRPC method: monitor");
     }
 
-    const call = (
-      this.service as Record<string, CallableFunction>
-    ).monitor() as grpc.ClientDuplexStream<
+    const call = fn.call(this.service, {
+      ...instance,
+      port,
+      fqbn,
+    }) as grpc.ClientDuplexStream<
       Record<string, unknown>,
       Record<string, unknown>
     >;
 
     // Send the opening config message
     const openMessage: Record<string, unknown> = {
-      ...this.instance,
+      ...instance,
       port,
       fqbn,
     };
@@ -727,11 +721,9 @@ export class ArduinoGrpcClient extends EventEmitter {
     port?: { address: string; protocol: string },
     programmer?: string
   ): Promise<{ debuggingSupported: boolean }> {
-    if (!this.instance) {
-      throw new Error("No instance available");
-    }
+    const instance = this.ensureInstance();
     return this.unaryCall("isDebugSupported", {
-      ...this.instance,
+      ...instance,
       fqbn,
       port: port ?? {},
       programmer: programmer ?? "",
@@ -747,11 +739,9 @@ export class ArduinoGrpcClient extends EventEmitter {
     port: { address: string; protocol: string },
     programmer?: string
   ): Promise<Record<string, unknown>> {
-    if (!this.instance) {
-      throw new Error("No instance available");
-    }
+    const instance = this.ensureInstance();
     return this.unaryCall("getDebugConfig", {
-      ...this.instance,
+      ...instance,
       sketchPath,
       fqbn,
       port,
@@ -763,11 +753,9 @@ export class ArduinoGrpcClient extends EventEmitter {
    * Lists available programmers for a board.
    */
   async listProgrammers(fqbn: string): Promise<Record<string, unknown>> {
-    if (!this.instance) {
-      throw new Error("No instance available");
-    }
+    const instance = this.ensureInstance();
     return this.unaryCall("listProgrammersAvailableForUpload", {
-      ...this.instance,
+      ...instance,
       fqbn,
     });
   }
@@ -805,20 +793,20 @@ export class ArduinoGrpcClient extends EventEmitter {
         return;
       }
 
-      const fn = (this.service as Record<string, CallableFunction>)[method];
+      const fn = this.service[method];
       if (typeof fn !== "function") {
         reject(new Error(`Unknown gRPC method: ${method}`));
         return;
       }
 
-      (fn as Function).call(
+      fn.call(
         this.service,
         request,
-        (error: grpc.ServiceError | null, response: TRes) => {
+        (error: grpc.ServiceError | null, response: unknown) => {
           if (error) {
             reject(new Error(`gRPC ${method} failed: ${error.message}`));
           } else {
-            resolve(response);
+            resolve(response as TRes);
           }
         }
       );
@@ -840,13 +828,13 @@ export class ArduinoGrpcClient extends EventEmitter {
         return;
       }
 
-      const fn = (this.service as Record<string, CallableFunction>)[method];
+      const fn = this.service[method];
       if (typeof fn !== "function") {
         reject(new Error(`Unknown gRPC method: ${method}`));
         return;
       }
 
-      const stream = (fn as Function).call(
+      const stream = fn.call(
         this.service,
         request
       ) as grpc.ClientReadableStream<Record<string, unknown>>;

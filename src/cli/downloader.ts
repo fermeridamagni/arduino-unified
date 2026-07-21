@@ -1,10 +1,6 @@
 import * as fs from "node:fs";
-import { createWriteStream } from "node:fs";
-import * as http from "node:http";
-import * as https from "node:https";
 import * as os from "node:os";
 import * as path from "node:path";
-import { pipeline } from "node:stream/promises";
 import type * as vscode from "vscode";
 
 /**
@@ -82,58 +78,69 @@ function getDownloadUrl(version: string, platform: PlatformDescriptor): string {
 }
 
 /**
- * Downloads a file from a URL, following redirects.
+ * Calculates the SHA-256 checksum of a file.
+ */
+export async function calculateChecksum(filePath: string): Promise<string> {
+  const { createHash } = await import("node:crypto");
+  const handle = await fs.promises.open(filePath, "r");
+  const hash = createHash("sha256");
+  const stream = handle.createReadStream();
+
+  for await (const chunk of stream) {
+    hash.update(chunk);
+  }
+
+  await handle.close();
+  return hash.digest("hex");
+}
+
+/**
+ * Downloads a file from a URL using modern fetch API, reporting progress.
  */
 async function downloadFile(
   url: string,
   destPath: string,
   onProgress?: (downloaded: number, total: number | null) => void
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const makeRequest = (requestUrl: string, redirectCount = 0): void => {
-      if (redirectCount > 5) {
-        reject(new Error("Too many redirects"));
-        return;
+  const response = await fetch(url, { redirect: "follow" });
+  if (!response.ok) {
+    throw new Error(
+      `Download failed: HTTP ${response.status} ${response.statusText}`
+    );
+  }
+
+  const contentLengthStr = response.headers.get("content-length");
+  const totalSize = contentLengthStr
+    ? Number.parseInt(contentLengthStr, 10)
+    : null;
+  let downloadedSize = 0;
+
+  if (!response.body) {
+    throw new Error("Download failed: No response body received");
+  }
+
+  const reader = response.body.getReader();
+  const fileHandle = await fs.promises.open(destPath, "w");
+  const stream = fileHandle.createWriteStream();
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
       }
-
-      const client = requestUrl.startsWith("https:") ? https : http;
-      client
-        .get(requestUrl, (response) => {
-          // Handle redirects
-          if (
-            response.statusCode &&
-            response.statusCode >= 300 &&
-            response.statusCode < 400 &&
-            response.headers.location
-          ) {
-            makeRequest(response.headers.location, redirectCount + 1);
-            return;
-          }
-
-          if (response.statusCode !== 200) {
-            reject(new Error(`Download failed: HTTP ${response.statusCode}`));
-            return;
-          }
-
-          const totalSize = response.headers["content-length"]
-            ? Number.parseInt(response.headers["content-length"], 10)
-            : null;
-          let downloadedSize = 0;
-
-          const fileStream = createWriteStream(destPath);
-
-          response.on("data", (chunk: Buffer) => {
-            downloadedSize += chunk.length;
-            onProgress?.(downloadedSize, totalSize);
-          });
-
-          pipeline(response, fileStream).then(resolve).catch(reject);
-        })
-        .on("error", reject);
-    };
-
-    makeRequest(url);
-  });
+      if (value) {
+        downloadedSize += value.length;
+        onProgress?.(downloadedSize, totalSize);
+        if (!stream.write(value)) {
+          await new Promise<void>((resolve) => stream.once("drain", resolve));
+        }
+      }
+    }
+  } finally {
+    await new Promise<void>((resolve) => stream.end(resolve));
+    await fileHandle.close();
+  }
 }
 
 /**
@@ -152,7 +159,7 @@ async function extractTarGz(
 }
 
 /**
- * Extracts a zip archive. Uses unzip on Unix, PowerShell on Windows.
+ * Extracts a zip archive. Uses unzip on Unix, parameterized PowerShell on Windows.
  */
 async function extractZip(archivePath: string, destDir: string): Promise<void> {
   const { execFile } = await import("node:child_process");
@@ -163,8 +170,12 @@ async function extractZip(archivePath: string, destDir: string): Promise<void> {
 
   if (os.platform() === "win32") {
     await execFileAsync("powershell", [
+      "-NoProfile",
+      "-NonInteractive",
       "-Command",
-      `Expand-Archive -Force -Path "${archivePath}" -DestinationPath "${destDir}"`,
+      "param($Path, $Dest); Expand-Archive -Force -LiteralPath $Path -DestinationPath $Dest",
+      archivePath,
+      destDir,
     ]);
   } else {
     await execFileAsync("unzip", ["-o", archivePath, "-d", destDir]);
@@ -195,10 +206,15 @@ export class ArduinoCliDownloader {
   }
 
   /**
-   * Checks if the CLI binary is already downloaded.
+   * Checks if the CLI binary is already downloaded (asynchronous).
    */
-  isCliInstalled(): boolean {
-    return fs.existsSync(this.getCliBinaryPath());
+  async isCliInstalled(): Promise<boolean> {
+    try {
+      await fs.promises.access(this.getCliBinaryPath(), fs.constants.F_OK);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -206,11 +222,13 @@ export class ArduinoCliDownloader {
    *
    * @param version - Version to download (default: latest known stable)
    * @param progress - VSCode progress reporter
+   * @param expectedChecksum - Optional SHA-256 checksum to verify
    * @returns Path to the extracted CLI binary
    */
   async download(
     version: string = DEFAULT_CLI_VERSION,
-    progress?: vscode.Progress<{ message?: string; increment?: number }>
+    progress?: vscode.Progress<{ message?: string; increment?: number }>,
+    expectedChecksum?: string
   ): Promise<string> {
     const platform = detectPlatform();
     const url = getDownloadUrl(version, platform);
@@ -244,9 +262,20 @@ export class ArduinoCliDownloader {
         }
       });
 
+      const actualChecksum = await calculateChecksum(archivePath);
       this.outputChannel.appendLine(
-        "[Downloader] Download complete, extracting..."
+        `[Downloader] Download complete. SHA-256: ${actualChecksum}`
       );
+
+      if (
+        expectedChecksum &&
+        actualChecksum.toLowerCase() !== expectedChecksum.toLowerCase()
+      ) {
+        throw new Error(
+          `Checksum mismatch for downloaded binary. Expected: ${expectedChecksum}, got: ${actualChecksum}`
+        );
+      }
+
       progress?.report({ message: "Extracting Arduino CLI..." });
 
       if (platform.archiveType === "tar.gz") {
