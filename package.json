@@ -415,17 +415,18 @@
   "scripts": {
     "vscode:prepublish": "pnpm run package",
     "compile-webview": "cd webview && pnpm run build",
-    "compile": "pnpm run compile-webview && pnpm run check-types && pnpm run check && node esbuild.js",
+    "compile": "pnpm run compile-webview && pnpm run check-types && pnpm run check && bun esbuild.ts",
     "watch": "npm-run-all -p watch:*",
     "watch:webview": "cd webview && pnpm run build --watch",
-    "watch:esbuild": "node esbuild.js --watch",
+    "watch:esbuild": "bun esbuild.ts --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
-    "package": "pnpm run compile-webview && pnpm run check-types && pnpm run check && node esbuild.js --production",
+    "package": "pnpm run compile-webview && pnpm run check-types && pnpm run check && bun esbuild.ts --production",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "pnpm run compile-tests && pnpm run compile && pnpm run check",
     "check-types": "tsc --noEmit",
     "test": "vscode-test",
+    "test:bun": "bun test src/test",
     "check": "ultracite check",
     "fix": "ultracite fix"
   },
@@ -443,7 +444,8 @@
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.14.3",
-    "@grpc/proto-loader": "^0.8.0"
+    "@grpc/proto-loader": "^0.8.0",
+    "yaml": "^2.9.0"
   },
   "packageManager": "pnpm@10.33.0",
   "pnpm": {

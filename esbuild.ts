@@ -1,14 +1,14 @@
-const esbuild = require("esbuild");
-const path = require("node:path");
-const fs = require("node:fs");
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as esbuild from "esbuild";
 
 const production = process.argv.includes("--production");
 const watch = process.argv.includes("--watch");
 
 /**
- * @type {import('esbuild').Plugin}
+ * Problem matcher plugin for esbuild error reporting.
  */
-const esbuildProblemMatcherPlugin = {
+const esbuildProblemMatcherPlugin: esbuild.Plugin = {
   name: "esbuild-problem-matcher",
 
   setup(build) {
@@ -30,46 +30,48 @@ const esbuildProblemMatcherPlugin = {
 };
 
 /**
- * Plugin to copy proto files to the dist directory.
- * The gRPC proto-loader needs the .proto files at runtime.
- * @type {import('esbuild').Plugin}
+ * Plugin to copy proto files asynchronously to the dist directory.
  */
-const copyProtoPlugin = {
+const copyProtoPlugin: esbuild.Plugin = {
   name: "copy-proto-files",
 
   setup(build) {
-    build.onEnd(() => {
+    build.onEnd(async () => {
       const srcProto = path.join(__dirname, "src", "cli", "proto");
       const distProto = path.join(__dirname, "dist", "proto");
 
-      copyDirSync(srcProto, distProto);
+      await copyDirAsync(srcProto, distProto);
       console.log("[proto] Copied proto files to dist/proto");
     });
   },
 };
 
 /**
- * Recursively copies a directory.
+ * Recursively copies a directory asynchronously.
  */
-function copyDirSync(src, dest) {
-  if (!fs.existsSync(src)) {
+async function copyDirAsync(src: string, dest: string): Promise<void> {
+  try {
+    await fs.promises.access(src, fs.constants.F_OK);
+  } catch {
     return;
   }
-  fs.mkdirSync(dest, { recursive: true });
 
-  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+  await fs.promises.mkdir(dest, { recursive: true });
+  const entries = await fs.promises.readdir(src, { withFileTypes: true });
+
+  for (const entry of entries) {
     const srcPath = path.join(src, entry.name);
     const destPath = path.join(dest, entry.name);
 
     if (entry.isDirectory()) {
-      copyDirSync(srcPath, destPath);
+      await copyDirAsync(srcPath, destPath);
     } else {
-      fs.copyFileSync(srcPath, destPath);
+      await fs.promises.copyFile(srcPath, destPath);
     }
   }
 }
 
-async function main() {
+async function main(): Promise<void> {
   const ctx = await esbuild.context({
     entryPoints: ["src/extension.ts"],
     bundle: true,
@@ -83,6 +85,7 @@ async function main() {
     logLevel: "silent",
     plugins: [copyProtoPlugin, esbuildProblemMatcherPlugin],
   });
+
   if (watch) {
     await ctx.watch();
   } else {
