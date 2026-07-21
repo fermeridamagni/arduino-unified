@@ -1,3 +1,35 @@
+# Changelog
+
+## v1.1.2 - 2026-07-21
+
+Compared to `v1.1.1`
+
+### Fixes
+- fix(workflow): correct pull request event type in auto-assign workflow (0bb9631)
+
+### Refactors
+- refactor(core): deduplicate sketch logic and enforce strict TypeScript typing (9071c4c)
+
+### Documentation
+- docs: add PNPM package management rule to AGENTS.md (e075abb)
+- docs: remove Bun package manager requirement from AGENTS.md (a5ac21a)
+- docs: add AGENTS.md and rename GEMINI.md to ULTRACITE.md (bb74a4a)
+- docs: remove outdated publishing guide (000614f)
+
+### Tests
+- test: add VS Code API mock framework and expand unit test coverage (d7e1184)
+
+### Build
+- build: convert esbuild config to TypeScript and add Bun configuration (605cba0)
+
+### Chores
+- chore: ignore .release directory for release-publisher (2b2725d)
+- chore: initialized codegraph (2949cad)
+- chore: reorganize .gitignore entries (dfe6a01)
+
+### Other Changes
+- sec(cli): harden downloader operations and gRPC client lifecycle (0525172)
+
 # Change Log
 
 All notable changes to the "arduino-unified" extension will be documented in this file.
@@ -70,3 +102,4 @@ Arduino Unified 1.0.0 is the first stable release of the extension.
 - Update dependencies.
 
 ## [Unreleased]
+
