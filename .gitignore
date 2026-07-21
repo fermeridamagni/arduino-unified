@@ -1,6 +1,16 @@
+# Local development files
+.local
+
+# Dependencies
+node_modules
+
+# Build Artifacts
 out
 dist
-node_modules
-.vscode-test/
 *.vsix
+
+# Testing Artifacts
+.vscode-test
+
+# macOS
 .DS_Store
