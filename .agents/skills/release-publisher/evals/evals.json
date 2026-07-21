@@ -1,0 +1,29 @@
+{
+  "skill_name": "release-publisher",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "We need to release version 1.5.0 of this package. Please gather commits since the previous release, generate notes + changelog, show me the draft for approval, then create the tag and GitHub release.",
+      "expected_output": "Draft release notes and changelog are generated from commits since last tag, explicit confirmation checkpoint is requested before changelog/tag/release mutations.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Ship v2.0.0 and publish to npm plus GitHub Packages. If no release workflow exists, create one first and use Bun if this repo is Bun-based.",
+      "expected_output": "Workflow detection runs first, missing release.yml is generated with package-manager-specific commands, then release prep/publish steps run with confirmation gating.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Cut a prerelease v2.1.0-rc.1 for this app. Create release notes from recent commits, update changelog after my approval, and publish as a prerelease.",
+      "expected_output": "Skill produces draft artifacts, asks for approval, applies changelog, and creates a prerelease GitHub Release with the requested version tag.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "We are releasing version 1.2.0 of our VS Code extension. Set up the GitHub release workflow to publish to both VS Code Marketplace and Open VSX, draft the release notes, and wait for confirmation before releasing.",
+      "expected_output": "Workflow detection runs, missing release.yml is generated with steps for @vscode/vsce and ovsx publishing using guides/vscode-marketplace.md and guides/open-vsx.md, draft release notes are generated, manual PAT setup instructions are explained, and explicit confirmation checkpoint is presented.",
+      "files": []
+    }
+  ]
+}

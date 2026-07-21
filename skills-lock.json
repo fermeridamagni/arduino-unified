@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "release-publisher": {
+      "source": "fermeridamagni/skills",
+      "sourceType": "github",
+      "skillPath": "skills/release-publisher/SKILL.md",
+      "computedHash": "35ae7126ac0ee963f13058de22a8944a18bb4560161b440b4f9f7b0350ced33d"
+    }
+  }
+}
