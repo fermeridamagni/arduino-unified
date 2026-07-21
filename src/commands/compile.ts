@@ -1,10 +1,12 @@
-import * as fs from "node:fs";
-import * as path from "node:path";
 import * as vscode from "vscode";
 import type { BoardConfigStore } from "../boards/config-store";
 import type { BoardSelector } from "../boards/selector";
 import type { ArduinoGrpcClient } from "../cli/grpc-client";
 import type { ArduinoSettings } from "../config/settings";
+import {
+  ensureSketchMainFile,
+  validateBoardAndPortSelection,
+} from "../sketches/sketch-service";
 
 /**
  * Parsed compile error with file location.
@@ -88,17 +90,9 @@ async function compileSketch(
 ): Promise<CompileResult | null> {
   const selection = selector.getSelection();
 
-  if (!selection.fqbn) {
-    await vscode.window
-      .showErrorMessage(
-        "No board selected. Please select a board first.",
-        "Select Board"
-      )
-      .then((action) => {
-        if (action === "Select Board") {
-          vscode.commands.executeCommand("arduinoUnified.selectBoard");
-        }
-      });
+  if (
+    !(await validateBoardAndPortSelection(selection, { requirePort: false }))
+  ) {
     return null;
   }
 
@@ -113,34 +107,13 @@ async function compileSketch(
   // Clear previous diagnostics
   diagnosticCollection.clear();
 
-  const fqbn = configStore.getFqbnWithOptions(selection.fqbn);
-  // Ensure sketchDir is resolved properly
-  const isDir =
-    fs.existsSync(sketchPath) && fs.statSync(sketchPath).isDirectory();
-  const sketchDir = isDir ? sketchPath : path.dirname(sketchPath);
-  const folderName = path.basename(sketchDir);
-  const expectedMainFile = path.join(sketchDir, `${folderName}.ino`);
-
-  if (!fs.existsSync(expectedMainFile)) {
-    const action = await vscode.window.showErrorMessage(
-      `Arduino strictly requires the main sketch file to match its folder name. Expected: "${folderName}.ino"`,
-      `Rename active file to ${folderName}.ino`
-    );
-
-    if (action && !isDir) {
-      // Perform rename of the currently open .ino
-      try {
-        fs.renameSync(sketchPath, expectedMainFile);
-        // Don't proceed to allow vscode file watchers to catch up, or just proceed
-        vscode.window.showInformationMessage(
-          `Renamed to ${folderName}.ino! You can now compile.`
-        );
-      } catch (e) {
-        vscode.window.showErrorMessage(`Rename failed: ${e}`);
-      }
-    }
+  const sketchValidation = await ensureSketchMainFile(sketchPath, "compile");
+  if (!sketchValidation) {
     return null;
   }
+
+  const sketchDir = sketchValidation.sketchDir;
+  const fqbn = configStore.getFqbnWithOptions(selection.fqbn ?? "");
 
   outputChannel.show(true);
   outputChannel.appendLine("");
@@ -235,7 +208,9 @@ async function compileSketch(
   // Apply diagnostics
   applyDiagnostics(result.errors, diagnosticCollection);
 
-  if (!result.success) {
+  if (result.success) {
+    await vscode.window.showInformationMessage("Compilation successful!");
+  } else {
     const action = await vscode.window.showErrorMessage(
       "Compilation failed. See output for details.",
       "Show Output"

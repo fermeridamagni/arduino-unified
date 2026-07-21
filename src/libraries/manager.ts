@@ -59,9 +59,9 @@ export class LibraryManager {
     this.webviewProvider = webviewProvider;
   }
 
-  openWebview() {
+  async openWebview() {
     const defaultViewColumn = vscode.ViewColumn.Active;
-    const panel = this.webviewProvider.openWebview(
+    const panel = await this.webviewProvider.openWebview(
       "arduinoUnified.libraryManager",
       "Arduino: Library Manager",
       "libraries",
@@ -70,9 +70,9 @@ export class LibraryManager {
 
     // Setup message handler for UI to perform actions
     panel.webview.onDidReceiveMessage(async (message) => {
-      switch (message.type) {
-        case "LIBRARY_SEARCH": {
-          try {
+      try {
+        switch (message.type) {
+          case "LIBRARY_SEARCH": {
             // For empty queries, show installed libraries (fast)
             // For non-empty queries, search with limit
             const query = message.query?.trim() ?? "";
@@ -89,44 +89,45 @@ export class LibraryManager {
                 data: installed.map((lib) => this.toWebviewFormat(lib)),
               });
             }
-          } catch (e) {
-            this.outputChannel.appendLine(`[Webview] Error searching: ${e}`);
+            break;
           }
-          break;
-        }
-        case "LIBRARY_LIST_INSTALLED": {
-          try {
+          case "LIBRARY_LIST_INSTALLED": {
             const installed = await this.listInstalled();
             panel.webview.postMessage({
               type: "LIBRARY_INSTALLED_LIST",
               data: installed.map((lib) => this.toWebviewFormat(lib)),
             });
-          } catch (e) {
-            this.outputChannel.appendLine(
-              `[Webview] Error listing installed: ${e}`
-            );
+            break;
           }
-          break;
+          case "LIBRARY_INSTALL": {
+            await this.install(message.name);
+            panel.webview.postMessage({
+              type: "LIBRARY_INSTALL_COMPLETE",
+              name: message.name,
+            });
+            break;
+          }
+          case "LIBRARY_UNINSTALL": {
+            // If message.version is provided, use it; otherwise an empty string usually tells arduino-cli to uninstall all versions or the active one.
+            await this.uninstall(message.name, message.version || "");
+            panel.webview.postMessage({
+              type: "LIBRARY_UNINSTALL_COMPLETE",
+              name: message.name,
+            });
+            break;
+          }
+          default:
+            break;
         }
-        case "LIBRARY_INSTALL": {
-          await this.install(message.name);
-          panel.webview.postMessage({
-            type: "LIBRARY_INSTALL_COMPLETE",
-            name: message.name,
-          });
-          break;
-        }
-        case "LIBRARY_UNINSTALL": {
-          // If message.version is provided, use it; otherwise an empty string usually tells arduino-cli to uninstall all versions or the active one.
-          await this.uninstall(message.name, message.version || "");
-          panel.webview.postMessage({
-            type: "LIBRARY_UNINSTALL_COMPLETE",
-            name: message.name,
-          });
-          break;
-        }
-        default:
-          break;
+      } catch (e) {
+        const errorMsg = e instanceof Error ? e.message : String(e);
+        this.outputChannel.appendLine(
+          `[Webview] Error handling ${message.type}: ${errorMsg}`
+        );
+        panel.webview.postMessage({
+          type: "ERROR",
+          message: errorMsg,
+        });
       }
     });
 

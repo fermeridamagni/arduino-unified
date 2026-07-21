@@ -1,11 +1,13 @@
-import * as fs from "node:fs";
-import * as path from "node:path";
 import * as vscode from "vscode";
 import type { BoardConfigStore } from "../boards/config-store";
 import type { BoardDiscoveryService } from "../boards/discovery";
 import type { BoardSelector } from "../boards/selector";
 import type { ArduinoGrpcClient } from "../cli/grpc-client";
 import type { ArduinoSettings } from "../config/settings";
+import {
+  ensureSketchMainFile,
+  validateBoardAndPortSelection,
+} from "../sketches/sketch-service";
 import { compileSketch, getSketchPath } from "./compile";
 
 /**
@@ -90,31 +92,9 @@ async function uploadSketch(
 ): Promise<UploadResult | null> {
   const selection = selector.getSelection();
 
-  if (!selection.fqbn) {
-    await vscode.window
-      .showErrorMessage(
-        "No board selected. Please select a board first.",
-        "Select Board"
-      )
-      .then((action) => {
-        if (action === "Select Board") {
-          vscode.commands.executeCommand("arduinoUnified.selectBoard");
-        }
-      });
-    return null;
-  }
-
-  if (!selection.portAddress) {
-    await vscode.window
-      .showErrorMessage(
-        "No port selected. Please select a port first.",
-        "Select Port"
-      )
-      .then((action) => {
-        if (action === "Select Port") {
-          vscode.commands.executeCommand("arduinoUnified.selectPort");
-        }
-      });
+  if (
+    !(await validateBoardAndPortSelection(selection, { requirePort: true }))
+  ) {
     return null;
   }
 
@@ -141,35 +121,14 @@ async function uploadSketch(
     }
   }
 
-  const fqbn = configStore.getFqbnWithOptions(selection.fqbn);
-  const port = selection.port;
-  // Ensure sketchDir is resolved properly
-  const isDir =
-    fs.existsSync(sketchPath) && fs.statSync(sketchPath).isDirectory();
-  const sketchDir = isDir ? sketchPath : path.dirname(sketchPath);
-  const folderName = path.basename(sketchDir);
-  const expectedMainFile = path.join(sketchDir, `${folderName}.ino`);
-
-  if (!fs.existsSync(expectedMainFile)) {
-    const action = await vscode.window.showErrorMessage(
-      `Arduino strictly requires the main sketch file to match its folder name. Expected: "${folderName}.ino"`,
-      `Rename active file to ${folderName}.ino`
-    );
-
-    if (action && !isDir) {
-      // Perform rename of the currently open .ino
-      try {
-        fs.renameSync(sketchPath, expectedMainFile);
-        // Don't proceed to allow vscode file watchers to catch up, or just proceed
-        vscode.window.showInformationMessage(
-          `Renamed to ${folderName}.ino! You can now upload.`
-        );
-      } catch (e) {
-        vscode.window.showErrorMessage(`Rename failed: ${e}`);
-      }
-    }
+  const sketchValidation = await ensureSketchMainFile(sketchPath, "upload");
+  if (!sketchValidation) {
     return null;
   }
+
+  const fqbn = configStore.getFqbnWithOptions(selection.fqbn ?? "");
+  const port = selection.port;
+  const sketchDir = sketchValidation.sketchDir;
 
   outputChannel.show(true);
   outputChannel.appendLine("");
@@ -201,7 +160,7 @@ async function uploadSketch(
             sketchPath: sketchDir,
             fqbn,
             port: {
-              address: port?.address ?? selection.portAddress,
+              address: port?.address ?? selection.portAddress ?? "",
               protocol: port?.protocol ?? "serial",
             },
             verbose: settings.uploadVerbose,
@@ -254,21 +213,20 @@ async function uploadUsingProgrammer(
 ): Promise<void> {
   const selection = selector.getSelection();
 
-  if (!(selection.fqbn && selection.portAddress)) {
-    await vscode.window.showErrorMessage(
-      "Please select a board and port first."
-    );
+  if (
+    !(await validateBoardAndPortSelection(selection, { requirePort: true }))
+  ) {
     return;
   }
 
   // Get or prompt for programmer
-  let programmer = configStore.getProgrammer(selection.fqbn);
+  let programmer = configStore.getProgrammer(selection.fqbn ?? "");
   if (!programmer) {
-    programmer = await promptForProgrammer(client, selection.fqbn);
+    programmer = await promptForProgrammer(client, selection.fqbn ?? "");
     if (!programmer) {
       return;
     }
-    await configStore.setProgrammer(selection.fqbn, programmer);
+    await configStore.setProgrammer(selection.fqbn ?? "", programmer);
   }
 
   const sketchPath = getSketchPath();
@@ -292,8 +250,13 @@ async function uploadUsingProgrammer(
     }
   }
 
-  const fqbn = configStore.getFqbnWithOptions(selection.fqbn);
-  const sketchDir = path.dirname(sketchPath);
+  const sketchValidation = await ensureSketchMainFile(sketchPath, "upload");
+  if (!sketchValidation) {
+    return;
+  }
+
+  const fqbn = configStore.getFqbnWithOptions(selection.fqbn ?? "");
+  const sketchDir = sketchValidation.sketchDir;
 
   outputChannel.show(true);
   outputChannel.appendLine(`Uploading using programmer: ${programmer}`);
@@ -306,7 +269,7 @@ async function uploadUsingProgrammer(
         sketchPath: sketchDir,
         fqbn,
         port: {
-          address: selection.portAddress,
+          address: selection.portAddress ?? "",
           protocol: selection.port?.protocol ?? "serial",
         },
         programmer,
@@ -347,10 +310,9 @@ async function burnBootloader(
 ): Promise<void> {
   const selection = selector.getSelection();
 
-  if (!(selection.fqbn && selection.portAddress)) {
-    await vscode.window.showErrorMessage(
-      "Please select a board and port first."
-    );
+  if (
+    !(await validateBoardAndPortSelection(selection, { requirePort: true }))
+  ) {
     return;
   }
 

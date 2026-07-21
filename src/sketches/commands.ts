@@ -1,3 +1,4 @@
+import * as path from "node:path";
 import * as vscode from "vscode";
 import type { SketchService } from "./sketch-service";
 
@@ -73,7 +74,7 @@ async function newSketch(
 
   try {
     const mainFile = await sketchService.createNewSketch(name);
-    const sketchDir = mainFile.substring(0, mainFile.lastIndexOf("/"));
+    const sketchDir = path.dirname(mainFile);
 
     // Save to sketchbook or let user choose
     const choices = [
@@ -104,16 +105,13 @@ async function newSketch(
       });
       if (uri) {
         const newDir = uri.fsPath.replace(/\.ino$/, "");
-        const newName = newDir.split("/").pop() ?? name;
+        const newName = path.basename(newDir) || name;
         const newMainFile = await sketchService.copySketch(
           sketchDir,
-          newDir.substring(0, newDir.lastIndexOf("/")),
+          path.dirname(newDir),
           newName
         );
-        const newSketchDir = newMainFile.substring(
-          0,
-          newMainFile.lastIndexOf("/")
-        );
+        const newSketchDir = path.dirname(newMainFile);
         await vscode.commands.executeCommand(
           "vscode.openFolder",
           vscode.Uri.file(newSketchDir),
@@ -122,7 +120,7 @@ async function newSketch(
       }
     }
 
-    sketchService.addToRecent(mainFile);
+    await sketchService.addToRecent(mainFile);
     await context.globalState.update(
       RECENT_SKETCHES_KEY,
       sketchService.getRecentSketches()
@@ -145,7 +143,7 @@ async function openRecentSketch(sketchService: SketchService): Promise<void> {
   }
 
   const items = recent.map((sketchPath) => {
-    const name = sketchPath.split("/").pop() ?? sketchPath;
+    const name = path.basename(sketchPath) || sketchPath;
     return {
       label: `$(file-code) ${name}`,
       description: sketchPath,
@@ -179,7 +177,7 @@ async function archiveCurrentSketch(
   }
 
   const sketchDir = workspaceFolders[0].uri.fsPath;
-  const validation = sketchService.validateSketchFolder(sketchDir);
+  const validation = await sketchService.validateSketchFolder(sketchDir);
 
   if (!validation.valid) {
     await vscode.window.showErrorMessage(
@@ -259,7 +257,7 @@ async function saveSketchAs(sketchService: SketchService): Promise<void> {
       destUri[0].fsPath,
       newName
     );
-    const newDir = newMainFile.substring(0, newMainFile.lastIndexOf("/"));
+    const newDir = path.dirname(newMainFile);
     await vscode.commands.executeCommand(
       "vscode.openFolder",
       vscode.Uri.file(newDir),

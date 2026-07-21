@@ -52,18 +52,26 @@ export class BoardSelector implements vscode.Disposable {
     });
 
     // Register the select board command
-    const selectCmd = vscode.commands.registerCommand(
-      "arduinoUnified.selectBoard",
-      () => this.showBoardPicker()
-    );
-    this.disposables.push(selectCmd);
+    try {
+      const selectCmd = vscode.commands.registerCommand(
+        "arduinoUnified.selectBoard",
+        () => this.showBoardPicker()
+      );
+      this.disposables.push(selectCmd);
+    } catch {
+      // Ignore if command is already registered (e.g., in test host environment)
+    }
 
     // Register the select port command
-    const portCmd = vscode.commands.registerCommand(
-      "arduinoUnified.selectPort",
-      () => this.showPortPicker()
-    );
-    this.disposables.push(portCmd);
+    try {
+      const portCmd = vscode.commands.registerCommand(
+        "arduinoUnified.selectPort",
+        () => this.showPortPicker()
+      );
+      this.disposables.push(portCmd);
+    } catch {
+      // Ignore if command is already registered (e.g., in test host environment)
+    }
   }
 
   /**

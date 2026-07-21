@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type * as vscode from "vscode";
+import * as vscode from "vscode";
 import type { ArduinoGrpcClient } from "../cli/grpc-client";
 import type { ArduinoSettings } from "../config/settings";
 
@@ -13,6 +13,148 @@ export interface SketchInfo {
   mainFile: string;
   name: string;
   rootFolder: string;
+}
+
+/**
+ * Result of validating and resolving a sketch folder/file.
+ */
+export interface SketchValidationResult {
+  error?: string;
+  expectedMainFile: string;
+  sketchDir: string;
+  valid: boolean;
+}
+
+/**
+ * Validates board and port selection, prompting user if missing.
+ */
+export async function validateBoardAndPortSelection(
+  selection: { fqbn?: string; portAddress?: string },
+  options: { requirePort?: boolean } = {}
+): Promise<boolean> {
+  if (!selection.fqbn) {
+    const action = await vscode.window.showErrorMessage(
+      "No board selected. Please select a board first.",
+      "Select Board"
+    );
+    if (action === "Select Board") {
+      await vscode.commands.executeCommand("arduinoUnified.selectBoard");
+    }
+    return false;
+  }
+
+  if (options.requirePort && !selection.portAddress) {
+    const action = await vscode.window.showErrorMessage(
+      "No port selected. Please select a port first.",
+      "Select Port"
+    );
+    if (action === "Select Port") {
+      await vscode.commands.executeCommand("arduinoUnified.selectPort");
+    }
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Validates and resolves sketch directory and main file asynchronously.
+ */
+export async function validateAndResolveSketch(
+  sketchPath: string
+): Promise<SketchValidationResult> {
+  let isDir = false;
+  let statExists = true;
+  try {
+    const stat = await fs.promises.stat(sketchPath);
+    isDir = stat.isDirectory();
+  } catch {
+    statExists = false;
+  }
+
+  if (!statExists) {
+    if (sketchPath.toLowerCase().endsWith(".ino")) {
+      const sketchDir = path.dirname(sketchPath);
+      const folderName = path.basename(sketchDir);
+      const expectedMainFile = path.join(sketchDir, `${folderName}.ino`);
+      if (path.basename(sketchPath) === `${folderName}.ino`) {
+        return {
+          valid: false,
+          sketchDir,
+          expectedMainFile,
+          error: `Path does not exist: ${sketchPath}`,
+        };
+      }
+      return {
+        valid: false,
+        sketchDir,
+        expectedMainFile,
+        error: `Arduino strictly requires the main sketch file to match its folder name. Expected: "${folderName}.ino"`,
+      };
+    }
+    return {
+      valid: false,
+      sketchDir: sketchPath,
+      expectedMainFile: "",
+      error: `Path does not exist: ${sketchPath}`,
+    };
+  }
+
+  const sketchDir = isDir ? sketchPath : path.dirname(sketchPath);
+  const folderName = path.basename(sketchDir);
+  const expectedMainFile = path.join(sketchDir, `${folderName}.ino`);
+
+  try {
+    await fs.promises.access(expectedMainFile, fs.constants.F_OK);
+    return {
+      valid: true,
+      sketchDir,
+      expectedMainFile,
+    };
+  } catch {
+    return {
+      valid: false,
+      sketchDir,
+      expectedMainFile,
+      error: `Arduino strictly requires the main sketch file to match its folder name. Expected: "${folderName}.ino"`,
+    };
+  }
+}
+
+/**
+ * Prompts user to fix mismatch between sketch folder and main file if missing.
+ */
+export async function ensureSketchMainFile(
+  sketchPath: string,
+  operationName: "compile" | "upload" = "compile"
+): Promise<SketchValidationResult | null> {
+  const result = await validateAndResolveSketch(sketchPath);
+  if (result.valid) {
+    return result;
+  }
+
+  const folderName = path.basename(result.sketchDir);
+  const isDir =
+    (await fs.promises.stat(sketchPath).catch(() => null))?.isDirectory() ??
+    false;
+
+  const action = await vscode.window.showErrorMessage(
+    `Arduino strictly requires the main sketch file to match its folder name. Expected: "${folderName}.ino"`,
+    `Rename active file to ${folderName}.ino`
+  );
+
+  if (action && !isDir) {
+    try {
+      await fs.promises.rename(sketchPath, result.expectedMainFile);
+      vscode.window.showInformationMessage(
+        `Renamed to ${folderName}.ino! You can now ${operationName}.`
+      );
+    } catch (e) {
+      vscode.window.showErrorMessage(`Rename failed: ${e}`);
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -101,43 +243,16 @@ export class SketchService {
    * Validates that a folder follows Arduino sketch specification.
    * The folder must contain a .ino file with the same name as the folder.
    */
-  validateSketchFolder(folderPath: string): {
+  async validateSketchFolder(folderPath: string): Promise<{
     valid: boolean;
     mainFile?: string;
     error?: string;
-  } {
-    const folderName = path.basename(folderPath);
-    const expectedMainFile = path.join(folderPath, `${folderName}.ino`);
-
-    if (!fs.existsSync(folderPath)) {
-      return { valid: false, error: `Folder does not exist: ${folderPath}` };
+  }> {
+    const res = await validateAndResolveSketch(folderPath);
+    if (!res.valid) {
+      return { valid: false, error: res.error };
     }
-
-    if (!fs.statSync(folderPath).isDirectory()) {
-      // Maybe it's a .ino file - check parent
-      if (folderPath.endsWith(".ino")) {
-        const dir = path.dirname(folderPath);
-        const dirName = path.basename(dir);
-        const fileName = path.basename(folderPath, ".ino");
-        if (dirName === fileName) {
-          return { valid: true, mainFile: folderPath };
-        }
-        return {
-          valid: false,
-          error: `Sketch file name "${fileName}.ino" doesn't match folder name "${dirName}"`,
-        };
-      }
-      return { valid: false, error: "Path is not a directory" };
-    }
-
-    if (!fs.existsSync(expectedMainFile)) {
-      return {
-        valid: false,
-        error: `Missing main sketch file: ${folderName}.ino`,
-      };
-    }
-
-    return { valid: true, mainFile: expectedMainFile };
+    return { valid: true, mainFile: res.expectedMainFile };
   }
 
   /**
@@ -147,7 +262,8 @@ export class SketchService {
     sketchPath: string,
     outputPath?: string
   ): Promise<string> {
-    const sketchDir = fs.statSync(sketchPath).isDirectory()
+    const stat = await fs.promises.stat(sketchPath);
+    const sketchDir = stat.isDirectory()
       ? sketchPath
       : path.dirname(sketchPath);
 
@@ -168,7 +284,8 @@ export class SketchService {
     destDir: string,
     newName: string
   ): Promise<string> {
-    const sourceDir = fs.statSync(sourcePath).isDirectory()
+    const stat = await fs.promises.stat(sourcePath);
+    const sourceDir = stat.isDirectory()
       ? sourcePath
       : path.dirname(sourcePath);
 
@@ -204,10 +321,14 @@ export class SketchService {
   /**
    * Adds a sketch path to the recent sketches list.
    */
-  addToRecent(sketchPath: string): void {
-    const dir = fs.statSync(sketchPath).isDirectory()
-      ? sketchPath
-      : path.dirname(sketchPath);
+  async addToRecent(sketchPath: string): Promise<void> {
+    let dir = sketchPath;
+    try {
+      const stat = await fs.promises.stat(sketchPath);
+      dir = stat.isDirectory() ? sketchPath : path.dirname(sketchPath);
+    } catch {
+      dir = path.dirname(sketchPath);
+    }
 
     // Remove if already present, add to front
     this.recentSketches = this.recentSketches.filter((s) => s !== dir);
@@ -262,7 +383,8 @@ export class SketchService {
    * Manually loads sketch info without gRPC.
    */
   private async loadSketchManually(sketchPath: string): Promise<SketchInfo> {
-    const sketchDir = fs.statSync(sketchPath).isDirectory()
+    const stat = await fs.promises.stat(sketchPath);
+    const sketchDir = stat.isDirectory()
       ? sketchPath
       : path.dirname(sketchPath);
 

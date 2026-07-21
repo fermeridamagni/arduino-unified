@@ -24,22 +24,6 @@ export function registerLanguageSupport(
     }
   }
 
-  // Register file associations
-  const fileAssociations = vscode.workspace.getConfiguration("files");
-  const existingAssociations = fileAssociations.get<Record<string, string>>(
-    "associations",
-    {}
-  );
-
-  if (!existingAssociations["*.ino"]) {
-    const updated = { ...existingAssociations, "*.ino": "cpp", "*.pde": "cpp" };
-    fileAssociations.update(
-      "associations",
-      updated,
-      vscode.ConfigurationTarget.Global
-    );
-  }
-
   // Register hover provider for Arduino-specific keywords
   context.subscriptions.push(
     vscode.languages.registerHoverProvider(

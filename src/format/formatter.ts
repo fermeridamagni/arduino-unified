@@ -75,35 +75,25 @@ export class ArduinoFormatter
         args.push(`--style=${DEFAULT_CLANG_FORMAT_STYLE}`);
       }
 
-      await execFileAsync(clangFormatPath, args, {
-        encoding: "utf8",
-        maxBuffer: 10 * 1024 * 1024,
-        timeout: 10_000,
-      });
-
-      // Send content via stdin
-      const child = execFile(
-        clangFormatPath,
-        args,
-        { encoding: "utf8", maxBuffer: 10 * 1024 * 1024, timeout: 10_000 },
-        () => {}
-      );
-      child.stdin?.write(originalText);
-      child.stdin?.end();
-
+      // Single child process execution with stdin streaming
       const formatted = await new Promise<string>((resolve, reject) => {
-        let output = "";
-        child.stdout?.on("data", (data: string) => {
-          output += data;
-        });
-        child.on("close", (code) => {
-          if (code === 0) {
-            resolve(output);
-          } else {
-            reject(new Error(`clang-format exited with code ${code}`));
+        const child = execFile(
+          clangFormatPath,
+          args,
+          { encoding: "utf8", maxBuffer: 10 * 1024 * 1024, timeout: 10_000 },
+          (error, stdout) => {
+            if (error) {
+              reject(error);
+            } else {
+              resolve(stdout);
+            }
           }
-        });
-        child.on("error", reject);
+        );
+
+        if (child.stdin) {
+          child.stdin.write(originalText);
+          child.stdin.end();
+        }
       });
 
       if (formatted === originalText) {
@@ -124,21 +114,34 @@ export class ArduinoFormatter
   }
 
   /**
+   * Helper to check file existence asynchronously.
+   */
+  private async fileExists(filePath: string): Promise<boolean> {
+    try {
+      await fs.promises.access(filePath, fs.constants.F_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Finds the clang-format binary.
-   * Checks: settings path → bundled → system PATH
+   * Checks: settings path → system PATH → common locations
    */
   private async findClangFormat(): Promise<string | null> {
     // Check user setting
     const settingsPath = this.settings.formatterPath;
-    if (settingsPath && fs.existsSync(settingsPath)) {
+    if (settingsPath && (await this.fileExists(settingsPath))) {
       return settingsPath;
     }
 
-    // Check system PATH
+    // Check system PATH using platform-appropriate lookup tool
+    const cmd = process.platform === "win32" ? "where" : "which";
     try {
-      const { stdout } = await execFileAsync("which", ["clang-format"]);
-      const systemPath = stdout.trim();
-      if (systemPath && fs.existsSync(systemPath)) {
+      const { stdout } = await execFileAsync(cmd, ["clang-format"]);
+      const systemPath = stdout.trim().split(/\r?\n/)[0];
+      if (systemPath && (await this.fileExists(systemPath))) {
         return systemPath;
       }
     } catch {
@@ -153,7 +156,7 @@ export class ArduinoFormatter
     ];
 
     for (const p of commonPaths) {
-      if (fs.existsSync(p)) {
+      if (await this.fileExists(p)) {
         return p;
       }
     }
@@ -163,7 +166,7 @@ export class ArduinoFormatter
 
   /**
    * Searches for a .clang-format style file in the project hierarchy.
-   * Search order: sketch folder → parent dirs → data dir → null (use default)
+   * Search order: sketch folder → parent dirs → null (use default)
    */
   private async findStyleFile(documentUri: vscode.Uri): Promise<string | null> {
     let dir = path.dirname(documentUri.fsPath);
@@ -171,7 +174,7 @@ export class ArduinoFormatter
     // Walk up directory tree looking for .clang-format
     for (let i = 0; i < 10; i++) {
       const stylePath = path.join(dir, ".clang-format");
-      if (fs.existsSync(stylePath)) {
+      if (await this.fileExists(stylePath)) {
         return stylePath;
       }
 

@@ -106,6 +106,7 @@ export class ArduinoSerialMonitor implements vscode.Disposable {
       iconPath: new vscode.ThemeIcon("plug"),
     });
 
+    this.startMonitor(selection.portAddress, selection.fqbn, baudRate);
     this.terminal.show();
     vscode.commands.executeCommand(
       "setContext",
@@ -206,35 +207,21 @@ export class ArduinoSerialMonitor implements vscode.Disposable {
    * Registers serial monitor commands.
    */
   private registerCommands(): void {
-    this.disposables.push(
-      vscode.commands.registerCommand("arduinoUnified.openSerialMonitor", () =>
-        this.connect()
-      )
-    );
+    const cmds: [string, (...args: unknown[]) => unknown][] = [
+      ["arduinoUnified.openSerialMonitor", () => this.connect()],
+      ["arduinoUnified.closeSerialMonitor", () => this.disconnect()],
+      ["arduinoUnified.monitor.pause", () => this.pause()],
+      ["arduinoUnified.monitor.resume", () => this.resume()],
+      ["arduinoUnified.changeBaudRate", () => this.changeBaudRate()],
+    ];
 
-    this.disposables.push(
-      vscode.commands.registerCommand("arduinoUnified.closeSerialMonitor", () =>
-        this.disconnect()
-      )
-    );
-
-    this.disposables.push(
-      vscode.commands.registerCommand("arduinoUnified.monitor.pause", () =>
-        this.pause()
-      )
-    );
-
-    this.disposables.push(
-      vscode.commands.registerCommand("arduinoUnified.monitor.resume", () =>
-        this.resume()
-      )
-    );
-
-    this.disposables.push(
-      vscode.commands.registerCommand("arduinoUnified.changeBaudRate", () =>
-        this.changeBaudRate()
-      )
-    );
+    for (const [name, fn] of cmds) {
+      try {
+        this.disposables.push(vscode.commands.registerCommand(name, fn));
+      } catch {
+        // Ignore if command already registered
+      }
+    }
 
     vscode.commands.executeCommand(
       "setContext",
@@ -246,14 +233,14 @@ export class ArduinoSerialMonitor implements vscode.Disposable {
   /**
    * Opens the Serial Plotter Webview and attaches it for data stream relay.
    */
-  openPlotterWebview(webviewProvider: WebviewProvider) {
+  async openPlotterWebview(webviewProvider: WebviewProvider) {
     if (!this.connected) {
       vscode.window.showWarningMessage(
         "Open the Serial Monitor and start a stream to use the Plotter."
       );
     }
 
-    this.currentWebviewPanel = webviewProvider.openWebview(
+    this.currentWebviewPanel = await webviewProvider.openWebview(
       "arduinoUnified.serialPlotter",
       "Arduino: Serial Plotter",
       "plotter",
@@ -275,6 +262,9 @@ export class ArduinoSerialMonitor implements vscode.Disposable {
     fqbn: string,
     baudRate: number
   ): void {
+    if (this.connected) {
+      return;
+    }
     try {
       this.monitorConnection = this.client.openMonitor(
         { address: portAddress, protocol: "serial" },

@@ -85,7 +85,23 @@ export function checkVersionCompatibility(version: string): VersionInfo {
     };
   }
 
-  if (parsed.major !== SUPPORTED_MAJOR) {
+  if (
+    minParsed &&
+    (parsed.major < SUPPORTED_MAJOR || compareVersions(parsed, minParsed) < 0)
+  ) {
+    return {
+      version,
+      compatible: false,
+      message:
+        `Arduino CLI version ${version} is too old. ` +
+        `Minimum required version is ${MIN_VERSION}.`,
+      major: parsed.major,
+      minor: parsed.minor,
+      patch: parsed.patch,
+    };
+  }
+
+  if (parsed.major > SUPPORTED_MAJOR) {
     return {
       version,
       compatible: false,
@@ -93,19 +109,6 @@ export function checkVersionCompatibility(version: string): VersionInfo {
         `Arduino CLI version ${version} is not supported. ` +
         `Arduino Unified requires Arduino CLI ${SUPPORTED_MAJOR}.x ` +
         `(found major version ${parsed.major}).`,
-      major: parsed.major,
-      minor: parsed.minor,
-      patch: parsed.patch,
-    };
-  }
-
-  if (minParsed && compareVersions(parsed, minParsed) < 0) {
-    return {
-      version,
-      compatible: false,
-      message:
-        `Arduino CLI version ${version} is too old. ` +
-        `Minimum required version is ${MIN_VERSION}.`,
       major: parsed.major,
       minor: parsed.minor,
       patch: parsed.patch,

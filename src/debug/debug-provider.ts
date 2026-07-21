@@ -128,48 +128,59 @@ export class ArduinoDebugProvider implements vscode.Disposable {
    * Registers debug commands.
    */
   private registerCommands(): void {
-    this.disposables.push(
-      vscode.commands.registerCommand("arduinoUnified.startDebug", async () => {
-        const supported = await this.isDebugSupported();
-        if (!supported) {
-          await vscode.window.showErrorMessage(
-            "Debug is not supported for the selected board/programmer combination."
-          );
-          return;
-        }
+    try {
+      this.disposables.push(
+        vscode.commands.registerCommand(
+          "arduinoUnified.startDebug",
+          async () => {
+            const supported = await this.isDebugSupported();
+            if (!supported) {
+              await vscode.window.showErrorMessage(
+                "Debug is not supported for the selected board/programmer combination."
+              );
+              return;
+            }
 
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        if (!workspaceFolder) {
-          await vscode.window.showErrorMessage("No workspace folder open.");
-          return;
-        }
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            if (!workspaceFolder) {
+              await vscode.window.showErrorMessage("No workspace folder open.");
+              return;
+            }
 
-        const config = await this.generateDebugConfig(
-          workspaceFolder.uri.fsPath
-        );
-        if (config) {
-          await vscode.debug.startDebugging(workspaceFolder, config);
-        }
-      })
-    );
-
-    this.disposables.push(
-      vscode.commands.registerCommand(
-        "arduinoUnified.checkDebugSupport",
-        async () => {
-          const supported = await this.isDebugSupported();
-          if (supported) {
-            await vscode.window.showInformationMessage(
-              "Debug is supported for the selected board! 🎉"
+            const config = await this.generateDebugConfig(
+              workspaceFolder.uri.fsPath
             );
-          } else {
-            await vscode.window.showWarningMessage(
-              "Debug is not supported for the selected board/programmer combination."
-            );
+            if (config) {
+              await vscode.debug.startDebugging(workspaceFolder, config);
+            }
           }
-        }
-      )
-    );
+        )
+      );
+    } catch {
+      // Ignore if command already registered
+    }
+
+    try {
+      this.disposables.push(
+        vscode.commands.registerCommand(
+          "arduinoUnified.checkDebugSupport",
+          async () => {
+            const supported = await this.isDebugSupported();
+            if (supported) {
+              await vscode.window.showInformationMessage(
+                "Debug is supported for the selected board! 🎉"
+              );
+            } else {
+              await vscode.window.showWarningMessage(
+                "Debug is not supported for the selected board/programmer combination."
+              );
+            }
+          }
+        )
+      );
+    } catch {
+      // Ignore if command already registered
+    }
   }
 
   /**

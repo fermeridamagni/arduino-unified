@@ -42,12 +42,23 @@ export interface BoardDiscoveryEvent {
 export class BoardDiscoveryService extends EventEmitter {
   private readonly outputChannel: vscode.OutputChannel;
   private cancelWatch: (() => void) | null = null;
+  private restartTimer: ReturnType<typeof setTimeout> | null = null;
   private ports: Map<string, DetectedPort> = new Map();
   private paused = false;
 
   constructor(outputChannel: vscode.OutputChannel) {
     super();
     this.outputChannel = outputChannel;
+  }
+
+  /**
+   * Clears any active restart timer.
+   */
+  private clearRestartTimer(): void {
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = null;
+    }
   }
 
   /**
@@ -58,6 +69,7 @@ export class BoardDiscoveryService extends EventEmitter {
       return; // Already watching
     }
 
+    this.clearRestartTimer();
     this.outputChannel.appendLine("[Discovery] Starting board watch...");
 
     this.cancelWatch = client.boardListWatch(
@@ -70,7 +82,9 @@ export class BoardDiscoveryService extends EventEmitter {
         );
         // Auto-restart after a delay
         this.cancelWatch = null;
-        setTimeout(() => {
+        this.clearRestartTimer();
+        this.restartTimer = setTimeout(() => {
+          this.restartTimer = null;
           if (!this.paused) {
             this.startWatching(client);
           }
@@ -83,6 +97,7 @@ export class BoardDiscoveryService extends EventEmitter {
    * Stops watching for board changes.
    */
   stopWatching(): void {
+    this.clearRestartTimer();
     if (this.cancelWatch) {
       this.cancelWatch();
       this.cancelWatch = null;

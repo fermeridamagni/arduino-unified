@@ -40,47 +40,52 @@ export class PlatformManager {
     this.webviewProvider = webviewProvider;
   }
 
-  openWebview() {
-    const panel = this.webviewProvider.openWebview(
+  async openWebview() {
+    const panel = await this.webviewProvider.openWebview(
       "arduinoUnified.platformManager",
       "Arduino: Board Manager",
       "platforms"
     );
 
     panel.webview.onDidReceiveMessage(async (message) => {
-      switch (message.type) {
-        case "PLATFORM_SEARCH": {
-          try {
+      try {
+        switch (message.type) {
+          case "PLATFORM_SEARCH": {
             const results = await this.search(message.query || undefined);
             panel.webview.postMessage({
               type: "PLATFORM_SEARCH_RESULTS",
               data: results,
             });
-          } catch (e) {
-            this.outputChannel.appendLine(
-              `[Webview] Error searching platforms: ${e}`
-            );
+            break;
           }
-          break;
+          case "PLATFORM_INSTALL": {
+            await this.install(message.id);
+            panel.webview.postMessage({
+              type: "PLATFORM_INSTALL_COMPLETE",
+              id: message.id,
+            });
+            break;
+          }
+          case "PLATFORM_UNINSTALL": {
+            await this.uninstall(message.id);
+            panel.webview.postMessage({
+              type: "PLATFORM_UNINSTALL_COMPLETE",
+              id: message.id,
+            });
+            break;
+          }
+          default:
+            break;
         }
-        case "PLATFORM_INSTALL": {
-          await this.install(message.id);
-          panel.webview.postMessage({
-            type: "PLATFORM_INSTALL_COMPLETE",
-            id: message.id,
-          });
-          break;
-        }
-        case "PLATFORM_UNINSTALL": {
-          await this.uninstall(message.id);
-          panel.webview.postMessage({
-            type: "PLATFORM_UNINSTALL_COMPLETE",
-            id: message.id,
-          });
-          break;
-        }
-        default:
-          break;
+      } catch (e) {
+        const errorMsg = e instanceof Error ? e.message : String(e);
+        this.outputChannel.appendLine(
+          `[Webview] Error handling ${message.type}: ${errorMsg}`
+        );
+        panel.webview.postMessage({
+          type: "ERROR",
+          message: errorMsg,
+        });
       }
     });
 

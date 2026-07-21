@@ -10,12 +10,12 @@ export class WebviewProvider {
     this.context = context;
   }
 
-  openWebview(
+  async openWebview(
     id: string,
     title: string,
     mode: "libraries" | "platforms" | "plotter",
     viewColumn: vscode.ViewColumn = vscode.ViewColumn.Active
-  ): vscode.WebviewPanel {
+  ): Promise<vscode.WebviewPanel> {
     let panel = this.panels.get(id);
 
     if (panel) {
@@ -33,7 +33,7 @@ export class WebviewProvider {
       ],
     });
 
-    panel.webview.html = this.getHtmlForWebview(panel.webview, mode);
+    panel.webview.html = await this.getHtmlForWebview(panel.webview, mode);
 
     panel.onDidDispose(() => {
       this.panels.delete(id);
@@ -43,16 +43,28 @@ export class WebviewProvider {
     return panel;
   }
 
-  private getHtmlForWebview(webview: vscode.Webview, mode: string): string {
+  private async getHtmlForWebview(
+    webview: vscode.Webview,
+    mode: string
+  ): Promise<string> {
     const distPath = path.join(this.context.extensionPath, "webview", "dist");
-
-    // Read the Vite-generated index.html
     const indexPath = path.join(distPath, "index.html");
-    if (!fs.existsSync(indexPath)) {
+
+    let html: string;
+    try {
+      html = await fs.promises.readFile(indexPath, "utf8");
+    } catch {
       return `<!DOCTYPE html><html><body><h2>Engineering Error</h2><p>Webview build not found. Run 'pnpm run compile-webview'.</p></body></html>`;
     }
 
-    let html = fs.readFileSync(indexPath, "utf8");
+    // Add Content Security Policy (CSP) header for webview security
+    const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https: data:; script-src ${webview.cspSource} 'unsafe-inline'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; connect-src ${webview.cspSource};">`;
+
+    if (html.includes("<head>")) {
+      html = html.replace("<head>", `<head>\n    ${csp}`);
+    } else {
+      html = `${csp}\n${html}`;
+    }
 
     // Replace the root element to inject the panelMode dataset var
     html = html.replace(

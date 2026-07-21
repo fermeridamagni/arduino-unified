@@ -29,7 +29,7 @@ import { WebviewProvider } from "./webview/webview-provider";
 
 /**
  * Arduino Unified extension activation.
- * Initializes all services, starts the CLI daemon, and registers commands.
+ * Initializes all services, registers commands synchronously, and starts background daemon init.
  */
 export async function activate(
   context: vscode.ExtensionContext
@@ -45,10 +45,8 @@ export async function activate(
   // ── Storage Path ──────────────────────────────────────────
   const storagePath = context.globalStorageUri.fsPath;
 
-  // ── CLI Downloader ────────────────────────────────────────
+  // ── CLI Downloader & Config ────────────────────────────────
   const downloader = new ArduinoCliDownloader(outputChannel, storagePath);
-
-  // ── CLI Config ────────────────────────────────────────────
   const cliConfig = new ArduinoCliConfig(outputChannel, settings, storagePath);
 
   // ── Daemon & gRPC Client ──────────────────────────────────
@@ -67,16 +65,45 @@ export async function activate(
     vscode.languages.createDiagnosticCollection("arduino");
   context.subscriptions.push(diagnosticCollection);
 
-  // ── Board Discovery ───────────────────────────────────────
+  // ── Board Discovery, Selector & Store ─────────────────────
   const discovery = new BoardDiscoveryService(outputChannel);
   context.subscriptions.push({ dispose: () => discovery.dispose() });
 
-  // ── Board Selector ────────────────────────────────────────
   const boardSelector = new BoardSelector(outputChannel, discovery);
   context.subscriptions.push(boardSelector);
 
-  // ── Board Config Store ────────────────────────────────────
   const configStore = new BoardConfigStore(context.globalState);
+
+  // ── Webview Provider & Core Services ──────────────────────
+  const webviewProvider = new WebviewProvider(context);
+  const sketchService = new SketchService(outputChannel, grpcClient, settings);
+  const libraryManager = new LibraryManager(
+    outputChannel,
+    grpcClient,
+    discovery,
+    webviewProvider
+  );
+  const platformManager = new PlatformManager(
+    outputChannel,
+    grpcClient,
+    discovery,
+    webviewProvider
+  );
+  const serialMonitor = new ArduinoSerialMonitor(
+    outputChannel,
+    grpcClient,
+    boardSelector,
+    settings
+  );
+  const debugProvider = new ArduinoDebugProvider(
+    outputChannel,
+    grpcClient,
+    boardSelector,
+    configStore
+  );
+
+  context.subscriptions.push(serialMonitor);
+  context.subscriptions.push(debugProvider);
 
   // ── CLI Version Status Bar ────────────────────────────────
   const versionStatusBar = vscode.window.createStatusBarItem(
@@ -86,25 +113,107 @@ export async function activate(
   versionStatusBar.command = "arduinoUnified.showOutput";
   context.subscriptions.push(versionStatusBar);
 
-  // ── Register Utility Commands ─────────────────────────────
+  // ── Synchronous Command Registrations ──────────────────────
   context.subscriptions.push(
     vscode.commands.registerCommand("arduinoUnified.showOutput", () => {
       outputChannel.show();
+    }),
+    vscode.commands.registerCommand(
+      "arduinoUnified.installLibrary",
+      async () => {
+        await libraryManager.openWebview();
+      }
+    ),
+    vscode.commands.registerCommand(
+      "arduinoUnified.installPlatform",
+      async () => {
+        await platformManager.openWebview();
+      }
+    ),
+    vscode.commands.registerCommand(
+      "arduinoUnified.openSerialPlotter",
+      async () => {
+        await serialMonitor.openPlotterWebview(webviewProvider);
+      }
+    )
+  );
+
+  registerCompileCommands(
+    context,
+    grpcClient,
+    boardSelector,
+    configStore,
+    settings,
+    outputChannel,
+    diagnosticCollection
+  );
+  registerUploadCommands(
+    context,
+    grpcClient,
+    boardSelector,
+    configStore,
+    settings,
+    discovery,
+    outputChannel,
+    diagnosticCollection
+  );
+  registerSketchCommands(context, sketchService);
+
+  // Language Support & Formatter
+  registerLanguageSupport(context);
+  const formatter = new ArduinoFormatter(outputChannel, settings);
+  context.subscriptions.push(formatter);
+  registerCodeActions(context);
+
+  // AI Features
+  registerChatParticipant(
+    context,
+    grpcClient,
+    boardSelector,
+    libraryManager,
+    serialMonitor
+  );
+  registerChatTools(
+    context,
+    grpcClient,
+    boardSelector,
+    libraryManager,
+    serialMonitor
+  );
+
+  // Settings Change Handler
+  context.subscriptions.push(
+    settings.onDidChange(async (e) => {
+      try {
+        if (
+          e.affectsConfiguration(
+            "arduinoUnified.boardManager.additionalUrls"
+          ) ||
+          e.affectsConfiguration("arduinoUnified.sketchbook.path")
+        ) {
+          outputChannel.appendLine("[Config] Settings changed, syncing...");
+          await cliConfig.syncToCliDaemon(grpcClient);
+          await grpcClient.initInstance();
+        }
+
+        if (e.affectsConfiguration("arduinoUnified.cli.path")) {
+          const response = await vscode.window.showInformationMessage(
+            "CLI path changed. Reload window to apply?",
+            "Reload"
+          );
+          if (response === "Reload") {
+            await vscode.commands.executeCommand(
+              "workbench.action.reloadWindow"
+            );
+          }
+        }
+      } catch (err) {
+        outputChannel.appendLine(`[Config Error] ${err}`);
+      }
     })
   );
 
-  // ── Language Support ──────────────────────────────────────
-  registerLanguageSupport(context);
-
-  // ── Code Formatter ────────────────────────────────────────
-  const formatter = new ArduinoFormatter(outputChannel, settings);
-  context.subscriptions.push(formatter);
-
-  // ── Code Actions ──────────────────────────────────────────
-  registerCodeActions(context);
-
-  // ── Initialize CLI ────────────────────────────────────────
-  // Show progress while initializing
+  // ── Background Daemon & CLI Initialization ────────────────
   vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Window,
@@ -112,11 +221,10 @@ export async function activate(
     },
     async (progress) => {
       try {
-        // Step 1: Ensure arduino-cli is available
         let cliPath = settings.cliPath;
 
         if (!cliPath) {
-          if (downloader.isCliInstalled()) {
+          if (await downloader.isCliInstalled()) {
             cliPath = downloader.getCliBinaryPath();
           } else {
             progress.report({ message: "Downloading Arduino CLI..." });
@@ -158,16 +266,13 @@ export async function activate(
           return;
         }
 
-        // Step 2: Start daemon
         progress.report({ message: "Starting Arduino CLI daemon..." });
         const configPath = await cliConfig.ensureConfigFile();
         const port = await daemon.start(cliPath, configPath);
 
-        // Step 3: Connect gRPC
         progress.report({ message: "Connecting to CLI..." });
         await grpcClient.connect(port);
 
-        // Step 4: Check version compatibility
         const versionString = await grpcClient.getVersion();
         const versionInfo = checkVersionCompatibility(versionString);
 
@@ -202,7 +307,6 @@ export async function activate(
             });
         }
 
-        // Step 5: Create & init instance
         progress.report({ message: "Initializing Arduino Core..." });
         await grpcClient.createInstance();
         await grpcClient.initInstance((progressData) => {
@@ -212,156 +316,31 @@ export async function activate(
           }
         });
 
-        // Step 6: Sync settings
         await cliConfig.syncToCliDaemon(grpcClient);
-
-        // Step 7: Start board discovery
         discovery.startWatching(grpcClient);
 
-        // Step 8: Initialize Webview Provider
-        const webviewProvider = new WebviewProvider(context);
-
-        // ── Services ────────────────────────────────────────
-        const sketchService = new SketchService(
-          outputChannel,
-          grpcClient,
-          settings
-        );
-        const libraryManager = new LibraryManager(
-          outputChannel,
-          grpcClient,
-          discovery,
-          webviewProvider
-        );
-        const platformManager = new PlatformManager(
-          outputChannel,
-          grpcClient,
-          discovery,
-          webviewProvider
-        );
-        const serialMonitor = new ArduinoSerialMonitor(
-          outputChannel,
-          grpcClient,
-          boardSelector,
-          settings
-        );
-        const debugProvider = new ArduinoDebugProvider(
-          outputChannel,
-          grpcClient,
-          boardSelector,
-          configStore
-        );
-
-        context.subscriptions.push(serialMonitor);
-        context.subscriptions.push(debugProvider);
-
-        // ── Register Commands ───────────────────────────────
-        registerCompileCommands(
-          context,
-          grpcClient,
-          boardSelector,
-          configStore,
-          settings,
-          outputChannel,
-          diagnosticCollection
-        );
-        registerUploadCommands(
-          context,
-          grpcClient,
-          boardSelector,
-          configStore,
-          settings,
-          discovery,
-          outputChannel,
-          diagnosticCollection
-        );
-        registerSketchCommands(context, sketchService);
-
-        // ── AI Features ─────────────────────────────────────
-        registerChatParticipant(
-          context,
-          grpcClient,
-          boardSelector,
-          libraryManager,
-          serialMonitor
-        );
-        registerChatTools(
-          context,
-          grpcClient,
-          boardSelector,
-          libraryManager,
-          serialMonitor
-        );
-
-        // ── Settings Change Handler ─────────────────────────
-        context.subscriptions.push(
-          settings.onDidChange(async (e) => {
-            if (
-              e.affectsConfiguration(
-                "arduinoUnified.boardManager.additionalUrls"
-              ) ||
-              e.affectsConfiguration("arduinoUnified.sketchbook.path")
-            ) {
-              outputChannel.appendLine("[Config] Settings changed, syncing...");
-              await cliConfig.syncToCliDaemon(grpcClient);
-              // Re-init to pick up new indexes
-              await grpcClient.initInstance();
-            }
-
-            if (e.affectsConfiguration("arduinoUnified.cli.path")) {
-              const response = await vscode.window.showInformationMessage(
-                "CLI path changed. Reload window to apply?",
-                "Reload"
+        daemon.on("exit", async (code: number) => {
+          try {
+            if (code !== 0) {
+              const action = await vscode.window.showErrorMessage(
+                `Arduino CLI daemon exited unexpectedly (code ${code}).`,
+                "Restart",
+                "Show Output"
               );
-              if (response === "Reload") {
-                await vscode.commands.executeCommand(
-                  "workbench.action.reloadWindow"
-                );
+              if (action === "Restart") {
+                const newPort = await daemon.restart(cliPath, configPath);
+                await grpcClient.connect(newPort);
+                await grpcClient.createInstance();
+                await grpcClient.initInstance();
+                discovery.startWatching(grpcClient);
+              } else if (action === "Show Output") {
+                outputChannel.show();
               }
             }
-          })
-        );
-
-        // Output Webview Panel Commands
-        context.subscriptions.push(
-          vscode.commands.registerCommand(
-            "arduinoUnified.installLibrary",
-            () => {
-              libraryManager.openWebview();
-            }
-          ),
-          vscode.commands.registerCommand(
-            "arduinoUnified.installPlatform",
-            () => {
-              platformManager.openWebview();
-            }
-          ),
-          // Add a command for the Serial Plotter (we'll implement the logic in serialMonitor)
-          vscode.commands.registerCommand(
-            "arduinoUnified.openSerialPlotter",
-            () => {
-              serialMonitor.openPlotterWebview(webviewProvider);
-            }
-          )
-        );
-
-        // ── Daemon Exit Handler ─────────────────────────────
-        daemon.on("exit", async (code: number) => {
-          if (code !== 0) {
-            const action = await vscode.window.showErrorMessage(
-              `Arduino CLI daemon exited unexpectedly (code ${code}).`,
-              "Restart",
-              "Show Output"
+          } catch (exitErr) {
+            outputChannel.appendLine(
+              `[Daemon Exit Error] Restart attempt failed: ${exitErr}`
             );
-            if (action === "Restart") {
-              const newPort = await daemon.restart(cliPath, configPath);
-              await grpcClient.connect(newPort);
-              await grpcClient.createInstance();
-              await grpcClient.initInstance();
-              discovery.startWatching(grpcClient);
-            } else if (action === "Show Output") {
-              outputChannel.show();
-            }
           }
         });
 

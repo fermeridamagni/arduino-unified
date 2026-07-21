@@ -17,53 +17,75 @@ export function SerialPlotter() {
 
 	const dataRef = useRef<number[][]>([[]]);
 	const isPausedRef = useRef(false);
+	const animationFrameRef = useRef<number | null>(null);
 
 	useEffect(() => {
 		isPausedRef.current = isPaused;
 	}, [isPaused]);
 
-	const processIncomingData = useCallback((line: string) => {
-		// Basic CSV/Space parsing:
-		// If we receive "12 34 56", we map them to lines.
-		const nums = line
-			.split(/[,\s]+/)
-			.map(Number.parseFloat)
-			.filter((n) => !Number.isNaN(n));
-		if (nums.length === 0) {
+	useEffect(() => {
+		return () => {
+			if (animationFrameRef.current !== null) {
+				cancelAnimationFrame(animationFrameRef.current);
+			}
+		};
+	}, []);
+
+	const scheduleUpdate = useCallback(() => {
+		if (animationFrameRef.current !== null) {
 			return;
 		}
-
-		const currentData = [...dataRef.current];
-		const now = Date.now() / 1000;
-
-		// Expand series dimensions if we received more values than we're tracking
-		if (nums.length + 1 > currentData.length) {
-			const needed = nums.length + 1 - currentData.length;
-			for (let i = 0; i < needed; i++) {
-				currentData.push([]);
-				setSeriesNames((prev) => [...prev, `Value ${prev.length}`]);
-			}
-		}
-
-		// Push X (Time)
-		currentData[0].push(now);
-
-		// Push Y values
-		for (let i = 0; i < nums.length; i++) {
-			currentData[i + 1].push(nums[i]);
-		}
-
-		// Trim arrays to max data points
-		if (currentData[0].length > MAX_DATA_POINTS) {
-			for (const series of currentData) {
-				series.shift();
-			}
-		}
-
-		dataRef.current = currentData;
-		// Debounce state update or let uplot handle it ideally.
-		setData([...currentData]);
+		animationFrameRef.current = requestAnimationFrame(() => {
+			animationFrameRef.current = null;
+			setData([...dataRef.current]);
+		});
 	}, []);
+
+	const processIncomingData = useCallback(
+		(line: string) => {
+			// Basic CSV/Space parsing:
+			// If we receive "12 34 56", we map them to lines.
+			const nums = line
+				.split(/[,\s]+/)
+				.map(Number.parseFloat)
+				.filter((n) => !Number.isNaN(n));
+			if (nums.length === 0) {
+				return;
+			}
+
+			const currentData = [...dataRef.current];
+			const now = Date.now() / 1000;
+
+			// Expand series dimensions if we received more values than we're tracking
+			if (nums.length + 1 > currentData.length) {
+				const needed = nums.length + 1 - currentData.length;
+				for (let i = 0; i < needed; i++) {
+					currentData.push([]);
+					setSeriesNames((prev) => [...prev, `Value ${prev.length}`]);
+				}
+			}
+
+			// Push X (Time)
+			currentData[0].push(now);
+
+			// Push Y values
+			for (let i = 0; i < nums.length; i++) {
+				currentData[i + 1].push(nums[i]);
+			}
+
+			// Trim arrays to max data points
+			if (currentData[0].length > MAX_DATA_POINTS) {
+				for (const series of currentData) {
+					series.shift();
+				}
+			}
+
+			dataRef.current = currentData;
+			// Batch state update via requestAnimationFrame for smooth 60fps rendering
+			scheduleUpdate();
+		},
+		[scheduleUpdate],
+	);
 
 	useEffect(() => {
 		const handleMessage = (event: MessageEvent) => {
@@ -83,6 +105,10 @@ export function SerialPlotter() {
 	}, [processIncomingData]);
 
 	const handleClear = () => {
+		if (animationFrameRef.current !== null) {
+			cancelAnimationFrame(animationFrameRef.current);
+			animationFrameRef.current = null;
+		}
 		const emptyData: number[][] = new Array(seriesNames.length)
 			.fill(0)
 			.map(() => []);

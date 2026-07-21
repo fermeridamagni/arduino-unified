@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import type * as vscode from "vscode";
+import * as YAML from "yaml";
 import type { ArduinoGrpcClient } from "../cli/grpc-client";
 import type { ArduinoSettings } from "./settings";
 
@@ -76,7 +77,15 @@ export class ArduinoCliConfig {
 
     const configPath = this.getConfigFilePath();
 
-    if (!fs.existsSync(configPath)) {
+    let exists = false;
+    try {
+      await fs.promises.access(configPath, fs.constants.F_OK);
+      exists = true;
+    } catch {
+      exists = false;
+    }
+
+    if (!exists) {
       const config = this.buildConfigYaml();
       await fs.promises.writeFile(configPath, config, "utf8");
       this.outputChannel.appendLine(
@@ -137,39 +146,50 @@ export class ArduinoCliConfig {
   }
 
   /**
-   * Builds the YAML content for arduino-cli.yaml.
+   * Builds the YAML content for arduino-cli.yaml using the yaml library.
    */
   private buildConfigYaml(): string {
     const dataDir = this.getDefaultDataDir();
     const sketchbookDir = this.getDefaultSketchbookDir();
     const additionalUrls = this.settings.additionalUrls;
 
-    const lines = ["board_manager:", "  additional_urls:"];
+    const configObj = {
+      board_manager: {
+        additional_urls: additionalUrls,
+      },
+      daemon: {
+        port: 0,
+      },
+      directories: {
+        data: dataDir,
+        downloads: path.join(dataDir, "staging"),
+        user: sketchbookDir,
+      },
+      logging: {
+        level: "info",
+        format: "json",
+      },
+      metrics: {
+        enabled: false,
+      },
+    };
 
-    for (const url of additionalUrls) {
-      lines.push(`    - ${url}`);
-    }
+    const doc = new YAML.Document(configObj);
+    YAML.visit(doc, {
+      Pair(_key, pair) {
+        if (YAML.isScalar(pair.value) && typeof pair.value.value === "string") {
+          pair.value.type = YAML.Scalar.QUOTE_SINGLE;
+        }
+      },
+      Seq(_key, seq) {
+        for (const item of seq.items) {
+          if (YAML.isScalar(item) && typeof item.value === "string") {
+            item.type = YAML.Scalar.QUOTE_SINGLE;
+          }
+        }
+      },
+    });
 
-    // Generate Arduino CLI YAML config
-    // Note: Windows paths must use single quotes to prevent escape sequence parsing issues
-    lines.push(
-      "",
-      "daemon:",
-      "  port: 0",
-      "",
-      "directories:",
-      `  data: '${dataDir}'`,
-      `  downloads: '${path.join(dataDir, "staging")}'`,
-      `  user: '${sketchbookDir}'`,
-      "",
-      "logging:",
-      "  level: info",
-      "  format: json",
-      "",
-      "metrics:",
-      "  enabled: false"
-    );
-
-    return `${lines.join("\n")}\n`;
+    return doc.toString();
   }
 }
