@@ -157,6 +157,80 @@ export async function ensureSketchMainFile(
   return null;
 }
 
+const SKETCH_FILE_EXTENSIONS = [".ino", ".pde"];
+
+/**
+ * Explicit inputs for resolveActiveSketchDir; when omitted, the values are
+ * read from the current VS Code state (kept injectable for unit tests).
+ */
+export interface SketchDirResolutionInputs {
+  activeFileName?: string | null;
+  openFileNames?: readonly string[];
+  workspaceFolderPaths?: readonly string[];
+}
+
+function isSketchFileName(fileName: string): boolean {
+  const lower = fileName.toLowerCase();
+  return SKETCH_FILE_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
+
+/**
+ * Resolves the folder of the sketch the user is currently working on.
+ *
+ * IntelliSense needs the sketch *folder* — not the workspace root — because
+ * the language server compiles that folder to discover libraries. This
+ * matters in monorepos where the sketch sits in a subfolder (e.g.
+ * apps/arduino-r4-firmware).
+ *
+ * Resolution order: active editor sketch file → any open sketch document →
+ * workspace folder containing a top-level sketch file (preferring one that
+ * matches the folder name).
+ */
+export async function resolveActiveSketchDir(
+  inputs: SketchDirResolutionInputs = {}
+): Promise<string | null> {
+  const activeFileName =
+    inputs.activeFileName === undefined
+      ? (vscode.window.activeTextEditor?.document.fileName ?? null)
+      : inputs.activeFileName;
+  const openFileNames =
+    inputs.openFileNames ??
+    vscode.workspace.textDocuments?.map((doc) => doc.fileName) ??
+    [];
+  const workspaceFolderPaths =
+    inputs.workspaceFolderPaths ??
+    vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath) ??
+    [];
+
+  if (activeFileName && isSketchFileName(activeFileName)) {
+    return path.dirname(activeFileName);
+  }
+
+  for (const fileName of openFileNames) {
+    if (isSketchFileName(fileName)) {
+      return path.dirname(fileName);
+    }
+  }
+
+  for (const folderPath of workspaceFolderPaths) {
+    try {
+      const entries = await fs.promises.readdir(folderPath);
+      const folderName = path.basename(folderPath).toLowerCase();
+      const preferred = entries.find(
+        (entry) => entry.toLowerCase() === `${folderName}.ino`
+      );
+      const sketchEntry = preferred ?? entries.find((e) => isSketchFileName(e));
+      if (sketchEntry) {
+        return folderPath;
+      }
+    } catch {
+      // Skip folders that cannot be read (removed, permissions, ...)
+    }
+  }
+
+  return null;
+}
+
 /**
  * SketchService handles sketch creation, validation, loading, and archiving.
  * Enforces the Arduino sketch specification: folder name = main .ino file name.

@@ -32,7 +32,7 @@
     "hardware"
   ],
   "activationEvents": [
-    "onLanguage:cpp",
+    "onLanguage:ino",
     "workspaceContains:**/*.ino",
     "workspaceContains:**/*.pde"
   ],
@@ -247,10 +247,25 @@
           "default": "",
           "description": "Custom path to arduino-language-server binary."
         },
+        "arduinoUnified.languageServer.version": {
+          "type": "string",
+          "default": "0.7.7",
+          "description": "Arduino Language Server version to auto-download when no custom path is set."
+        },
         "arduinoUnified.clangd.path": {
           "type": "string",
           "default": "",
           "description": "Custom path to clangd binary."
+        },
+        "arduinoUnified.clangd.version": {
+          "type": "string",
+          "default": "14.0.0",
+          "description": "Clangd version to auto-download when no custom path is set."
+        },
+        "arduinoUnified.languageServer.log": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable verbose logging for arduino-language-server."
         },
         "arduinoUnified.sketch.template": {
           "type": "string",
@@ -272,6 +287,13 @@
           ".pde"
         ],
         "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "ino",
+        "scopeName": "source.ino",
+        "path": "./syntaxes/ino.tmLanguage.json"
       }
     ],
     "menus": {
@@ -445,6 +467,7 @@
   "dependencies": {
     "@grpc/grpc-js": "^1.14.4",
     "@grpc/proto-loader": "^0.8.1",
+    "vscode-languageclient": "^10.1.1",
     "yaml": "^2.9.0"
   },
   "packageManager": "pnpm@11.25.0"
