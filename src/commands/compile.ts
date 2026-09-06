@@ -3,6 +3,7 @@ import type { BoardConfigStore } from "../boards/config-store";
 import type { BoardSelector } from "../boards/selector";
 import type { ArduinoGrpcClient } from "../cli/grpc-client";
 import type { ArduinoSettings } from "../config/settings";
+import type { ArduinoLanguageServer } from "../language/server";
 import {
   ensureSketchMainFile,
   validateBoardAndPortSelection,
@@ -44,7 +45,8 @@ export function registerCompileCommands(
   configStore: BoardConfigStore,
   settings: ArduinoSettings,
   outputChannel: vscode.OutputChannel,
-  diagnosticCollection: vscode.DiagnosticCollection
+  diagnosticCollection: vscode.DiagnosticCollection,
+  languageServer?: ArduinoLanguageServer
 ): void {
   // Arduino: Compile Sketch
   context.subscriptions.push(
@@ -55,7 +57,8 @@ export function registerCompileCommands(
         configStore,
         settings,
         outputChannel,
-        diagnosticCollection
+        diagnosticCollection,
+        languageServer
       )
     )
   );
@@ -70,6 +73,7 @@ export function registerCompileCommands(
         settings,
         outputChannel,
         diagnosticCollection,
+        languageServer,
         { exportBinary: true }
       )
     )
@@ -86,6 +90,7 @@ async function compileSketch(
   settings: ArduinoSettings,
   outputChannel: vscode.OutputChannel,
   diagnosticCollection: vscode.DiagnosticCollection,
+  languageServer?: ArduinoLanguageServer,
   options?: { exportBinary?: boolean }
 ): Promise<CompileResult | null> {
   const selection = selector.getSelection();
@@ -180,9 +185,16 @@ async function compileSketch(
 
         progress.report({ message: "Done!" });
 
+        // Tell ALS the full build finished so it refreshes library discovery
+        // from the build output (same flow as Arduino IDE's Verify).
+        const buildPath = compileResult.buildPath as string | undefined;
+        if (buildPath) {
+          languageServer?.notifyBuildCompleted(buildPath);
+        }
+
         return {
           success: true,
-          buildPath: compileResult.buildPath as string | undefined,
+          buildPath,
           usedLibraries: compileResult.usedLibraries as
             | Array<{ name: string; version: string }>
             | undefined,

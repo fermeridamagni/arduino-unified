@@ -124,6 +124,13 @@ export class ArduinoGrpcClient extends EventEmitter {
   }
 
   /**
+   * Returns the current instance ID if created, or null.
+   */
+  getInstanceId(): number | null {
+    return this.instance?.instance?.id ?? null;
+  }
+
+  /**
    * Initializes the Arduino Core instance (loads platforms and libraries indexes).
    */
   async initInstance(onProgress?: ProgressCallback): Promise<void> {

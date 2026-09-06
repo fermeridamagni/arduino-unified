@@ -29,6 +29,11 @@ export class BoardSelector implements vscode.Disposable {
   private selectedPort: DetectedPort | null = null;
   private customFqbn = "";
 
+  private readonly _onDidChangeSelection =
+    new vscode.EventEmitter<BoardSelection>();
+  readonly onDidChangeSelection: vscode.Event<BoardSelection> =
+    this._onDidChangeSelection.event;
+
   constructor(
     outputChannel: vscode.OutputChannel,
     discovery: BoardDiscoveryService
@@ -92,6 +97,7 @@ export class BoardSelector implements vscode.Disposable {
   selectBoard(board: DetectedBoard): void {
     this.selectedBoard = board;
     this.updateStatusBar();
+    this._onDidChangeSelection.fire(this.getSelection());
   }
 
   /**
@@ -104,6 +110,7 @@ export class BoardSelector implements vscode.Disposable {
       this.selectedBoard = port.boards[0];
     }
     this.updateStatusBar();
+    this._onDidChangeSelection.fire(this.getSelection());
   }
 
   /**
@@ -192,6 +199,7 @@ export class BoardSelector implements vscode.Disposable {
     this.outputChannel.appendLine(
       `[Board] Selected: ${this.selectedBoard?.name ?? "none"} @ ${this.selectedPort?.address ?? "none"}`
     );
+    this._onDidChangeSelection.fire(this.getSelection());
   }
 
   /**
@@ -228,6 +236,7 @@ export class BoardSelector implements vscode.Disposable {
     if (selected?.port) {
       this.selectedPort = selected.port;
       this.updateStatusBar();
+      this._onDidChangeSelection.fire(this.getSelection());
     }
   }
 
@@ -253,6 +262,7 @@ export class BoardSelector implements vscode.Disposable {
    * Disposes all resources.
    */
   dispose(): void {
+    this._onDidChangeSelection.dispose();
     this.statusBarItem.dispose();
     for (const d of this.disposables) {
       d.dispose();
