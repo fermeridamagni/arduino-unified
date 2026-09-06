@@ -447,11 +447,5 @@
     "@grpc/proto-loader": "^0.8.1",
     "yaml": "^2.9.0"
   },
-  "packageManager": "pnpm@10.33.0",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "protobufjs"
-    ]
-  }
+  "packageManager": "pnpm@11.25.0"
 }
