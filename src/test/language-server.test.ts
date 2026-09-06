@@ -485,7 +485,10 @@ suite("Arduino Language Server & Toolchain Unit Tests", () => {
       assert.strictEqual(captured.length, 1);
       const workspaceFolder = captured[0].clientOptions.workspaceFolder;
       assert.ok(workspaceFolder, "workspaceFolder must be set for ALS");
-      assert.strictEqual(workspaceFolder.uri.fsPath, sketchDir);
+      assert.strictEqual(
+        workspaceFolder.uri.fsPath.toLowerCase(),
+        sketchDir.toLowerCase()
+      );
 
       server.dispose();
     });
@@ -508,7 +511,10 @@ suite("Arduino Language Server & Toolchain Unit Tests", () => {
       assert.strictEqual(captured.length, 2);
       const workspaceFolder = captured[1].clientOptions.workspaceFolder;
       assert.ok(workspaceFolder);
-      assert.strictEqual(workspaceFolder.uri.fsPath, sketchB);
+      assert.strictEqual(
+        workspaceFolder.uri.fsPath.toLowerCase(),
+        sketchB.toLowerCase()
+      );
 
       server.dispose();
     });
@@ -540,7 +546,9 @@ suite("Arduino Language Server & Toolchain Unit Tests", () => {
   // ── 6. Document Selector Scoping ──────────────────────────────────
   suite("Document selector scopes C/C++ to sketch and libraries", () => {
     test("buildDocumentSelector attaches ino always and cpp/c per directory", () => {
-      const selector = buildDocumentSelector("/sketch", ["/libs/A", "/libs/A"]);
+      const sketchPath = path.resolve("/sketch");
+      const libPath = path.resolve("/libs/A");
+      const selector = buildDocumentSelector(sketchPath, [libPath, libPath]);
 
       const inoFilters = selector.filter((f) => f.language === "ino");
       assert.strictEqual(inoFilters.length, 2);
@@ -549,8 +557,16 @@ suite("Arduino Language Server & Toolchain Unit Tests", () => {
       const cppFilters = selector.filter((f) => f.language === "cpp");
       assert.strictEqual(cppFilters.length, 2, "duplicate dirs are deduped");
       const bases = cppFilters.map((f) => (f.pattern as { base: string }).base);
-      assert.ok(bases.includes("/sketch"));
-      assert.ok(bases.includes("/libs/A"));
+      const expectedSketchBase = vscode.Uri.file(sketchPath).fsPath;
+      const expectedLibBase = vscode.Uri.file(libPath).fsPath;
+      assert.ok(
+        bases.some((b) => b.toLowerCase() === expectedSketchBase.toLowerCase()),
+        "sketch base must be included"
+      );
+      assert.ok(
+        bases.some((b) => b.toLowerCase() === expectedLibBase.toLowerCase()),
+        "lib base must be included"
+      );
     });
 
     test("started client selector includes sketch and library directories", async () => {
@@ -577,12 +593,18 @@ suite("Arduino Language Server & Toolchain Unit Tests", () => {
       const cppBases = selector
         .filter((f) => f.language === "cpp")
         .map((f) => f.pattern?.base);
+      const expectedSketchBase = vscode.Uri.file(sketchDir).fsPath;
+      const expectedLibBase = vscode.Uri.file(libDir).fsPath;
       assert.ok(
-        cppBases.includes(sketchDir),
+        cppBases.some(
+          (b) => b?.toLowerCase() === expectedSketchBase.toLowerCase()
+        ),
         "cpp files in the sketch folder must be attached"
       );
       assert.ok(
-        cppBases.includes(libDir),
+        cppBases.some(
+          (b) => b?.toLowerCase() === expectedLibBase.toLowerCase()
+        ),
         "cpp files in installed library folders must be attached"
       );
 

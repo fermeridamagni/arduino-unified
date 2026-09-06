@@ -73,18 +73,21 @@ export function buildDocumentSelector(
   ];
   const seenDirs = new Set<string>();
   for (const dir of [sketchDir, ...libraryDirs]) {
-    if (!dir || seenDirs.has(dir)) {
+    if (!dir) {
       continue;
     }
-    seenDirs.add(dir);
+    const uri = vscode.Uri.file(dir);
+    const normalizedKey =
+      process.platform === "win32" ? uri.fsPath.toLowerCase() : uri.fsPath;
+    if (seenDirs.has(normalizedKey)) {
+      continue;
+    }
+    seenDirs.add(normalizedKey);
     for (const language of CPP_LANGUAGE_IDS) {
       filters.push({
         language,
         scheme: "file",
-        pattern: new vscode.RelativePattern(
-          vscode.Uri.file(dir),
-          CPP_SOURCE_GLOB
-        ),
+        pattern: new vscode.RelativePattern(uri, CPP_SOURCE_GLOB),
       });
     }
   }
