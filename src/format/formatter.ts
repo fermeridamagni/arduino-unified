@@ -30,11 +30,20 @@ export class ArduinoFormatter
 {
   private readonly outputChannel: vscode.OutputChannel;
   private readonly settings: ArduinoSettings;
+  private readonly storagePath?: string;
+  private readonly isLanguageServerRunning?: () => boolean;
   private readonly disposables: vscode.Disposable[] = [];
 
-  constructor(outputChannel: vscode.OutputChannel, settings: ArduinoSettings) {
+  constructor(
+    outputChannel: vscode.OutputChannel,
+    settings: ArduinoSettings,
+    storagePath?: string,
+    isLanguageServerRunning?: () => boolean
+  ) {
     this.outputChannel = outputChannel;
     this.settings = settings;
+    this.storagePath = storagePath;
+    this.isLanguageServerRunning = isLanguageServerRunning;
 
     // Register as a formatting provider for Arduino-related file types
     const selector: vscode.DocumentSelector = [
@@ -54,6 +63,13 @@ export class ArduinoFormatter
     document: vscode.TextDocument,
     options: vscode.FormattingOptions
   ): Promise<vscode.TextEdit[]> {
+    if (this.isLanguageServerRunning?.()) {
+      this.outputChannel.appendLine(
+        "[Formatter] Arduino Language Server is running; formatting handled by language server."
+      );
+      return [];
+    }
+
     const clangFormatPath = await this.findClangFormat();
 
     if (!clangFormatPath) {
@@ -127,13 +143,23 @@ export class ArduinoFormatter
 
   /**
    * Finds the clang-format binary.
-   * Checks: settings path → system PATH → common locations
+   * Checks: settings path → storage bin → system PATH → common locations
    */
   private async findClangFormat(): Promise<string | null> {
     // Check user setting
     const settingsPath = this.settings.formatterPath;
     if (settingsPath && (await this.fileExists(settingsPath))) {
       return settingsPath;
+    }
+
+    // Check managed storage bin (e.g. extracted from clangd release)
+    if (this.storagePath) {
+      const binName =
+        process.platform === "win32" ? "clang-format.exe" : "clang-format";
+      const managedPath = path.join(this.storagePath, "bin", binName);
+      if (await this.fileExists(managedPath)) {
+        return managedPath;
+      }
     }
 
     // Check system PATH using platform-appropriate lookup tool

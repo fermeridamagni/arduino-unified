@@ -275,6 +275,368 @@ export class WorkspaceEdit {
   }
 }
 
+export class CompletionItem {
+  label: string;
+  kind?: number;
+  tags?: number[];
+  detail?: string;
+  documentation?: string | unknown;
+  sortText?: string;
+  filterText?: string;
+  preselect?: boolean;
+  insertText?: string | unknown;
+  range?: Range | { inserting: Range; replacing: Range };
+  commitCharacters?: string[];
+  keepWhitespace?: boolean;
+  command?: unknown;
+  textEdit?: TextEdit;
+  additionalTextEdits?: TextEdit[];
+
+  constructor(label: string, kind?: number) {
+    this.label = label;
+    this.kind = kind;
+  }
+}
+
+export const CompletionItemKind = {
+  Text: 0,
+  Method: 1,
+  Function: 2,
+  Constructor: 3,
+  Field: 4,
+  Variable: 5,
+  Class: 6,
+  Interface: 7,
+  Module: 8,
+  Property: 9,
+  Unit: 10,
+  Value: 11,
+  Enum: 12,
+  Keyword: 13,
+  Snippet: 14,
+  Color: 15,
+  File: 16,
+  Reference: 17,
+  Folder: 18,
+  EnumMember: 19,
+  Constant: 20,
+  Struct: 21,
+  Event: 22,
+  Operator: 23,
+  TypeParameter: 24,
+} as const;
+export type CompletionItemKind =
+  (typeof CompletionItemKind)[keyof typeof CompletionItemKind];
+
+export class Location {
+  uri: Uri;
+  range: Range;
+
+  constructor(uri: Uri, rangeOrPosition: Range | Position) {
+    this.uri = uri;
+    this.range =
+      rangeOrPosition instanceof Range
+        ? rangeOrPosition
+        : new Range(rangeOrPosition, rangeOrPosition);
+  }
+}
+
+export class SnippetString {
+  value: string;
+
+  constructor(value = "") {
+    this.value = value;
+  }
+
+  appendText(string: string): SnippetString {
+    this.value += string;
+    return this;
+  }
+
+  appendTabstop(number = 0): SnippetString {
+    this.value += `$${number}`;
+    return this;
+  }
+
+  appendPlaceholder(
+    value: string | ((snippet: SnippetString) => void),
+    number = 0
+  ): SnippetString {
+    this.value += `\${${number}:${value}}`;
+    return this;
+  }
+}
+
+export class MarkdownString {
+  value: string;
+  isTrusted?: boolean;
+  supportThemeIcons?: boolean;
+  supportHtml?: boolean;
+
+  constructor(value = "", supportThemeIcons = false) {
+    this.value = value;
+    this.supportThemeIcons = supportThemeIcons;
+  }
+
+  appendText(value: string): MarkdownString {
+    this.value += value;
+    return this;
+  }
+
+  appendMarkdown(value: string): MarkdownString {
+    this.value += value;
+    return this;
+  }
+
+  appendCodeblock(value: string, language = ""): MarkdownString {
+    this.value += `\n\`\`\`${language}\n${value}\n\`\`\`\n`;
+    return this;
+  }
+}
+
+export class Hover {
+  contents: unknown[];
+  range?: Range;
+
+  constructor(contents: unknown | unknown[], range?: Range) {
+    this.contents = Array.isArray(contents) ? contents : [contents];
+    this.range = range;
+  }
+}
+
+export class DocumentSymbol {
+  name: string;
+  detail: string;
+  kind: number;
+  range: Range;
+  selectionRange: Range;
+  children: DocumentSymbol[] = [];
+
+  constructor(
+    name: string,
+    detail: string,
+    kind: number,
+    range: Range,
+    selectionRange: Range
+  ) {
+    this.name = name;
+    this.detail = detail;
+    this.kind = kind;
+    this.range = range;
+    this.selectionRange = selectionRange;
+  }
+}
+
+export const SymbolKind = {
+  File: 0,
+  Module: 1,
+  Namespace: 2,
+  Package: 3,
+  Class: 4,
+  Method: 5,
+  Property: 6,
+  Field: 7,
+  Constructor: 8,
+  Enum: 9,
+  Interface: 10,
+  Function: 11,
+  Variable: 12,
+  Constant: 13,
+  String: 14,
+  Number: 15,
+  Boolean: 16,
+  Array: 17,
+  Object: 18,
+  Key: 19,
+  Null: 20,
+  EnumMember: 21,
+  Struct: 22,
+  Event: 23,
+  Operator: 24,
+  TypeParameter: 25,
+} as const;
+export type SymbolKind = (typeof SymbolKind)[keyof typeof SymbolKind];
+
+export const SymbolTag = {
+  Deprecated: 1,
+} as const;
+export type SymbolTag = (typeof SymbolTag)[keyof typeof SymbolTag];
+
+export class CallHierarchyItem {
+  name: string;
+  kind: SymbolKind;
+  detail?: string;
+  uri: Uri;
+  range: Range;
+  selectionRange: Range;
+
+  constructor(
+    kind: SymbolKind,
+    name: string,
+    detail: string,
+    uri: Uri,
+    range: Range,
+    selectionRange: Range
+  ) {
+    this.kind = kind;
+    this.name = name;
+    this.detail = detail;
+    this.uri = uri;
+    this.range = range;
+    this.selectionRange = selectionRange;
+  }
+}
+
+export class TypeHierarchyItem {
+  name: string;
+  kind: SymbolKind;
+  detail?: string;
+  uri: Uri;
+  range: Range;
+  selectionRange: Range;
+
+  constructor(
+    kind: SymbolKind,
+    name: string,
+    detail: string,
+    uri: Uri,
+    range: Range,
+    selectionRange: Range
+  ) {
+    this.kind = kind;
+    this.name = name;
+    this.detail = detail;
+    this.uri = uri;
+    this.range = range;
+    this.selectionRange = selectionRange;
+  }
+}
+
+export class InlayHint {
+  position: Position;
+  label: string;
+  kind?: number;
+
+  constructor(position: Position, label: string, kind?: number) {
+    this.position = position;
+    this.label = label;
+    this.kind = kind;
+  }
+}
+
+export const InlayHintKind = {
+  Type: 1,
+  Parameter: 2,
+} as const;
+export type InlayHintKind = (typeof InlayHintKind)[keyof typeof InlayHintKind];
+
+export class SemanticTokens {
+  data: Uint32Array;
+  resultId?: string;
+
+  constructor(data: Uint32Array, resultId?: string) {
+    this.data = data;
+    this.resultId = resultId;
+  }
+}
+
+export class FoldingRange {
+  start: number;
+  end: number;
+  kind?: number;
+
+  constructor(start: number, end: number, kind?: number) {
+    this.start = start;
+    this.end = end;
+    this.kind = kind;
+  }
+}
+
+export class CodeLens {
+  range: Range;
+  command?: unknown;
+  isResolved: boolean;
+
+  constructor(range: Range, command?: unknown) {
+    this.range = range;
+    this.command = command;
+    this.isResolved = command !== undefined;
+  }
+}
+
+export class DocumentLink {
+  range: Range;
+  target?: Uri;
+  tooltip?: string;
+
+  constructor(range: Range, target?: Uri) {
+    this.range = range;
+    this.target = target;
+  }
+}
+
+export class SymbolInformation {
+  name: string;
+  kind: SymbolKind;
+  containerName: string;
+  location: Location;
+
+  constructor(
+    name: string,
+    kind: SymbolKind,
+    containerName: string,
+    location: Location
+  ) {
+    this.name = name;
+    this.kind = kind;
+    this.containerName = containerName;
+    this.location = location;
+  }
+}
+
+export class CancellationError extends Error {
+  constructor() {
+    super("Canceled");
+    this.name = "CancellationError";
+  }
+}
+
+export class RelativePattern {
+  base: string;
+  pattern: string;
+
+  constructor(base: string | { fsPath: string }, pattern: string) {
+    this.base = typeof base === "string" ? base : base.fsPath;
+    this.pattern = pattern;
+  }
+}
+
+export const FileChangeType = {
+  Changed: 1,
+  Created: 2,
+  Deleted: 3,
+} as const;
+export type FileChangeType =
+  (typeof FileChangeType)[keyof typeof FileChangeType];
+
+export const ConfigurationTarget = {
+  Global: 1,
+  Workspace: 2,
+  WorkspaceFolder: 3,
+} as const;
+export type ConfigurationTarget =
+  (typeof ConfigurationTarget)[keyof typeof ConfigurationTarget];
+
+export class SelectionRange {
+  range: Range;
+  parent?: SelectionRange;
+
+  constructor(range: Range, parent?: SelectionRange) {
+    this.range = range;
+    this.parent = parent;
+  }
+}
+
 export const CodeActionKind = {
   Empty: "",
   QuickFix: "quickfix",
@@ -430,6 +792,29 @@ export class MockOutputChannel {
 
   clear(): void {
     this.lines = [];
+  }
+
+  logLevel = 1;
+  onDidChangeLogLevel = new EventEmitter<number>().event;
+
+  trace(value: string): void {
+    this.lines.push(`[TRACE] ${value}`);
+  }
+
+  debug(value: string): void {
+    this.lines.push(`[DEBUG] ${value}`);
+  }
+
+  info(value: string): void {
+    this.lines.push(`[INFO] ${value}`);
+  }
+
+  warn(value: string): void {
+    this.lines.push(`[WARN] ${value}`);
+  }
+
+  error(value: string | Error): void {
+    this.lines.push(`[ERROR] ${value}`);
   }
 
   show(): void {}
@@ -599,7 +984,9 @@ export const window = {
   visibleTextEditors: [] as unknown[],
   outputChannels: new Map<string, MockOutputChannel>(),
 
-  createOutputChannel(name: string): MockOutputChannel {
+  onDidChangeActiveTextEditor: new EventEmitter<unknown>().event,
+
+  createOutputChannel(name: string, _options?: unknown): MockOutputChannel {
     const channel = new MockOutputChannel(name);
     window.outputChannels.set(name, channel);
     return channel;
@@ -859,6 +1246,29 @@ export const mockVscode = {
   Selection,
   TextEdit,
   WorkspaceEdit,
+  CompletionItem,
+  CompletionItemKind,
+  CodeLens,
+  DocumentLink,
+  SymbolInformation,
+  Location,
+  SnippetString,
+  MarkdownString,
+  Hover,
+  DocumentSymbol,
+  SymbolKind,
+  SymbolTag,
+  CallHierarchyItem,
+  TypeHierarchyItem,
+  InlayHint,
+  InlayHintKind,
+  SemanticTokens,
+  FoldingRange,
+  SelectionRange,
+  CancellationError,
+  RelativePattern,
+  FileChangeType,
+  ConfigurationTarget,
   CodeActionKind,
   CodeAction,
   ThemeIcon,

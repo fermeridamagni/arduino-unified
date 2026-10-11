@@ -1,3 +1,4 @@
+import * as path from "node:path";
 import * as vscode from "vscode";
 import { registerChatParticipant } from "./ai/chat-participant";
 import { registerCodeActions } from "./ai/code-actions";
@@ -19,12 +20,17 @@ import { ArduinoCliConfig } from "./config/cli-config";
 import { ArduinoSettings } from "./config/settings";
 import { ArduinoDebugProvider } from "./debug/debug-provider";
 import { ArduinoFormatter } from "./format/formatter";
+import { LanguageBinariesManager } from "./language/binaries";
 import { registerLanguageSupport } from "./language/language-client";
+import { ArduinoLanguageServer } from "./language/server";
 import { LibraryManager } from "./libraries/manager";
 import { ArduinoSerialMonitor } from "./monitor/serial-monitor";
 import { PlatformManager } from "./platforms/manager";
 import { registerSketchCommands } from "./sketches/commands";
-import { SketchService } from "./sketches/sketch-service";
+import {
+  resolveActiveSketchDir,
+  SketchService,
+} from "./sketches/sketch-service";
 import { WebviewProvider } from "./webview/webview-provider";
 
 /**
@@ -83,6 +89,7 @@ export async function activate(
     discovery,
     webviewProvider
   );
+  context.subscriptions.push(libraryManager);
   const platformManager = new PlatformManager(
     outputChannel,
     grpcClient,
@@ -138,15 +145,6 @@ export async function activate(
     )
   );
 
-  registerCompileCommands(
-    context,
-    grpcClient,
-    boardSelector,
-    configStore,
-    settings,
-    outputChannel,
-    diagnosticCollection
-  );
   registerUploadCommands(
     context,
     grpcClient,
@@ -159,10 +157,93 @@ export async function activate(
   );
   registerSketchCommands(context, sketchService);
 
-  // Language Support & Formatter
+  // Language Server, Support & Formatter
   registerLanguageSupport(context);
-  const formatter = new ArduinoFormatter(outputChannel, settings);
+  const binariesManager = new LanguageBinariesManager(
+    storagePath,
+    settings,
+    outputChannel
+  );
+  const languageServer = new ArduinoLanguageServer({
+    storagePath,
+    settings,
+    configStore,
+    outputChannel,
+    binariesManager,
+    getDaemonInfo: () => ({
+      port: daemon.getPort(),
+      instanceId: grpcClient.getInstanceId(),
+    }),
+    // Scope C/C++ IntelliSense to sketchbook + board platform library
+    // folders so ALS serves library headers without stealing C/C++ files
+    // from unrelated projects in the same workspace.
+    getLibraryDirs: async (fqbn: string) => {
+      const dirs: string[] = [];
+      const [packager, architecture] = fqbn.split(":");
+      const sketchbookDir = cliConfig.getDefaultSketchbookDir();
+      if (sketchbookDir) {
+        dirs.push(path.join(sketchbookDir, "libraries"));
+      }
+      if (packager && architecture) {
+        dirs.push(
+          path.join(
+            cliConfig.getDefaultDataDir(),
+            "packages",
+            packager,
+            "hardware",
+            architecture
+          )
+        );
+      }
+      return dirs;
+    },
+  });
+  context.subscriptions.push(languageServer);
+
+  // Restart IntelliSense when libraries are installed/uninstalled
+  libraryManager.onDidChangeLibraries(() => {
+    languageServer.handleLibraryChange();
+  });
+
+  // Track the active sketch folder so IntelliSense follows the edited .ino
+  const updateIntelliSenseSketch = (): void => {
+    resolveActiveSketchDir()
+      .then((sketchDir) => {
+        languageServer.handleSketchChange(sketchDir);
+      })
+      .catch(() => {
+        // Sketch resolution is best-effort; keep current state on failure.
+      });
+  };
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor(() => {
+      updateIntelliSenseSketch();
+    })
+  );
+
+  // Compile commands need the language server to report `ino/didCompleteBuild`
+  registerCompileCommands(
+    context,
+    grpcClient,
+    boardSelector,
+    configStore,
+    settings,
+    outputChannel,
+    diagnosticCollection,
+    languageServer
+  );
+
+  const formatter = new ArduinoFormatter(
+    outputChannel,
+    settings,
+    storagePath,
+    () => languageServer.isRunning()
+  );
   context.subscriptions.push(formatter);
+
+  boardSelector.onDidChangeSelection((selection) => {
+    languageServer.handleSelectionChange(selection);
+  });
   registerCodeActions(context);
 
   // AI Features
@@ -221,38 +302,7 @@ export async function activate(
     },
     async (progress) => {
       try {
-        let cliPath = settings.cliPath;
-
-        if (!cliPath) {
-          if (await downloader.isCliInstalled()) {
-            cliPath = downloader.getCliBinaryPath();
-          } else {
-            progress.report({ message: "Downloading Arduino CLI..." });
-
-            const shouldInstall = await vscode.window.showInformationMessage(
-              "Arduino CLI is not installed. Would you like to download it?",
-              "Download",
-              "Set Path Manually"
-            );
-
-            if (shouldInstall === "Download") {
-              cliPath = await downloader.download(
-                settings.cliVersion,
-                progress
-              );
-            } else if (shouldInstall === "Set Path Manually") {
-              const uri = await vscode.window.showOpenDialog({
-                canSelectFiles: true,
-                canSelectFolders: false,
-                openLabel: "Select arduino-cli binary",
-              });
-              if (uri?.[0]) {
-                cliPath = uri[0].fsPath;
-                await settings.update("cli.path", cliPath);
-              }
-            }
-          }
-        }
+        const cliPath = await resolveCliPath(settings, downloader, progress);
 
         if (!cliPath) {
           outputChannel.appendLine(
@@ -319,8 +369,19 @@ export async function activate(
         await cliConfig.syncToCliDaemon(grpcClient);
         discovery.startWatching(grpcClient);
 
+        // ── Resolve Language Server & Clangd ──────────────────────
+        await resolveAndStartLanguageServer(
+          binariesManager,
+          languageServer,
+          boardSelector,
+          settings,
+          outputChannel,
+          progress
+        );
+
         daemon.on("exit", async (code: number) => {
           try {
+            await languageServer.stop();
             if (code !== 0) {
               const action = await vscode.window.showErrorMessage(
                 `Arduino CLI daemon exited unexpectedly (code ${code}).`,
@@ -333,6 +394,7 @@ export async function activate(
                 await grpcClient.createInstance();
                 await grpcClient.initInstance();
                 discovery.startWatching(grpcClient);
+                languageServer.handleDaemonRestart();
               } else if (action === "Show Output") {
                 outputChannel.show();
               }
@@ -379,4 +441,114 @@ export async function activate(
  */
 export function deactivate(): void {
   // Disposables handle cleanup
+}
+
+/**
+ * Resolves the Arduino CLI binary path, downloading or prompting if missing.
+ */
+async function resolveCliPath(
+  settings: ArduinoSettings,
+  downloader: ArduinoCliDownloader,
+  progress: vscode.Progress<{ message?: string; increment?: number }>
+): Promise<string | null> {
+  if (settings.cliPath) {
+    return settings.cliPath;
+  }
+
+  if (await downloader.isCliInstalled()) {
+    return downloader.getCliBinaryPath();
+  }
+
+  progress.report({ message: "Downloading Arduino CLI..." });
+  const shouldInstall = await vscode.window.showInformationMessage(
+    "Arduino CLI is not installed. Would you like to download it?",
+    "Download",
+    "Set Path Manually"
+  );
+
+  if (shouldInstall === "Download") {
+    return downloader.download(settings.cliVersion, progress);
+  }
+
+  if (shouldInstall === "Set Path Manually") {
+    const uri = await vscode.window.showOpenDialog({
+      canSelectFiles: true,
+      canSelectFolders: false,
+      openLabel: "Select arduino-cli binary",
+    });
+    if (uri?.[0]) {
+      const selectedPath = uri[0].fsPath;
+      await settings.update("cli.path", selectedPath);
+      return selectedPath;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Resolves ALS and Clangd binaries, downloading or prompting if needed, and starts IntelliSense.
+ */
+async function resolveAndStartLanguageServer(
+  binariesManager: LanguageBinariesManager,
+  languageServer: ArduinoLanguageServer,
+  boardSelector: BoardSelector,
+  settings: ArduinoSettings,
+  outputChannel: vscode.OutputChannel,
+  progress: vscode.Progress<{ message?: string; increment?: number }>
+): Promise<void> {
+  progress.report({ message: "Resolving Language Server & Clangd..." });
+  let alsPath = await binariesManager.als.resolvePath();
+  let clangdPath = await binariesManager.clangd.resolvePath();
+
+  if (!(alsPath && clangdPath)) {
+    const shouldDownload = await vscode.window.showInformationMessage(
+      "Arduino Language Server and Clangd are required for real IntelliSense. Would you like to download them?",
+      "Download",
+      "Set Paths Manually"
+    );
+
+    if (shouldDownload === "Download") {
+      progress.report({ message: "Downloading language tools..." });
+      const resolved = await binariesManager.ensureBinaries(progress);
+      alsPath = resolved.alsPath;
+      clangdPath = resolved.clangdPath;
+    } else if (shouldDownload === "Set Paths Manually") {
+      if (!alsPath) {
+        const uri = await vscode.window.showOpenDialog({
+          canSelectFiles: true,
+          canSelectFolders: false,
+          openLabel: "Select arduino-language-server binary",
+        });
+        if (uri?.[0]) {
+          alsPath = uri[0].fsPath;
+          await settings.update("languageServer.path", alsPath);
+        }
+      }
+      if (!clangdPath) {
+        const uri = await vscode.window.showOpenDialog({
+          canSelectFiles: true,
+          canSelectFolders: false,
+          openLabel: "Select clangd binary",
+        });
+        if (uri?.[0]) {
+          clangdPath = uri[0].fsPath;
+          await settings.update("clangd.path", clangdPath);
+        }
+      }
+    }
+  }
+
+  if (alsPath && clangdPath) {
+    languageServer.setBinaries(alsPath, clangdPath);
+    // IntelliSense compiles the sketch folder, so it must know the sketch
+    // before the first board-driven start.
+    const sketchDir = await resolveActiveSketchDir();
+    languageServer.handleSketchChange(sketchDir);
+    languageServer.handleSelectionChange(boardSelector.getSelection());
+  } else {
+    outputChannel.appendLine(
+      "[Init] Language server or clangd not configured. IntelliSense will be unavailable."
+    );
+  }
 }

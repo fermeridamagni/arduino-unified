@@ -47,6 +47,11 @@ export class LibraryManager {
   private readonly discovery: BoardDiscoveryService;
   private readonly webviewProvider: WebviewProvider;
 
+  private readonly _onDidChangeLibraries = new vscode.EventEmitter<void>();
+  /** Fired after a library install/uninstall so IntelliSense can refresh. */
+  readonly onDidChangeLibraries: vscode.Event<void> =
+    this._onDidChangeLibraries.event;
+
   constructor(
     outputChannel: vscode.OutputChannel,
     client: ArduinoGrpcClient,
@@ -57,6 +62,13 @@ export class LibraryManager {
     this.client = client;
     this.discovery = discovery;
     this.webviewProvider = webviewProvider;
+  }
+
+  /**
+   * Disposes the change event emitter.
+   */
+  dispose(): void {
+    this._onDidChangeLibraries.dispose();
   }
 
   async openWebview() {
@@ -242,6 +254,7 @@ export class LibraryManager {
       });
 
       this.outputChannel.appendLine(`[Library] Installed ${name} successfully`);
+      this._onDidChangeLibraries.fire();
     } finally {
       this.discovery.resume(this.client);
     }
@@ -271,6 +284,7 @@ export class LibraryManager {
       this.outputChannel.appendLine(
         `[Library] Uninstalled ${name} successfully`
       );
+      this._onDidChangeLibraries.fire();
     } finally {
       this.discovery.resume(this.client);
     }

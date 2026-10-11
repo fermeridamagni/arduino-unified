@@ -120,9 +120,24 @@ export class ArduinoSettings {
     return this.config.get<string>("languageServer.path", "");
   }
 
+  /** Arduino Language Server version to auto-download. */
+  get languageServerVersion(): string {
+    return this.config.get<string>("languageServer.version", "0.7.7");
+  }
+
   /** Path to clangd binary. */
   get clangdPath(): string {
     return this.config.get<string>("clangd.path", "");
+  }
+
+  /** Clangd version to auto-download. */
+  get clangdVersion(): string {
+    return this.config.get<string>("clangd.version", "14.0.0");
+  }
+
+  /** Whether to enable verbose logging for arduino-language-server. */
+  get languageServerLog(): boolean {
+    return this.config.get<boolean>("languageServer.log", false);
   }
 
   // ── General ───────────────────────────────────────────────

@@ -17,8 +17,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        # Node.js 20+ required for ultracite (uses styleText from node:util)
-        node-version: [20, 22]
+        node-version: [24]
 
     runs-on: ${{ matrix.os }}
 
@@ -30,32 +29,20 @@ jobs:
         run: git config core.autocrlf false
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@v6
         with:
-          version: 10.33.0
+          version: 11.25.0
 
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node-version }}
+          cache: "pnpm"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - name: Setup pnpm cache
-        uses: actions/cache@v5
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -94,9 +81,9 @@ jobs:
           version: 10.33.0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version: "24.20.0"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2

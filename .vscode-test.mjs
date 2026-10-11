@@ -4,4 +4,7 @@ import { defineConfig } from "@vscode/test-cli";
 export default defineConfig({
   files: "out/test/**/*.test.js",
   launchArgs: [`--user-data-dir=${path.resolve("./.vscode-test/user-data")}`],
+  mocha: {
+    timeout: 20_000,
+  },
 });
